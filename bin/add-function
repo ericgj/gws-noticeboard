@@ -1,3 +1,3 @@
 #!/usr/bin/env sh
 
-cd functions && cookiecutter https://bitbucket.org/ericgj/ert-gcf-function-cookiecutter 
+cd functions && cookiecutter git+ssh://git@bitbucket.org/ericgj/ert-gcf-function-cookiecutter.git 
