@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+cached=$(git diff --name-only --cached | grep "\.py$")
+if [ ! -z "$cached" ]; then
+  echo "Running flake8..." >&2  && \
+  echo "$cached" | xargs flake8 && \
+  echo "Done." >&2
+fi
+

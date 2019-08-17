@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+CMD=${1:-encrypt}
+ENV=${2:-test}
+
+PLAINDIR="secrets/${ENV}"
+CIPHERDIR="secrets.enc/${ENV}"
+
+case "${CMD}" in
+  encrypt)
+    DESTDIR="${CIPHERDIR}"
+    ;;
+  decrypt)
+    DESTDIR="${PLAINDIR}"
+    ;;
+  *)
+    echo "Unknown command: ${CMD}" >&2
+    exit 1
+esac
+
+if [ ! -d "${DESTDIR}" ]; then
+  mkdir -p "${DESTDIR}"
+fi
+
+for f in "${SOURCEDIR}"
+do
+  if [[ -f $f ]]; then
+    gcloud kms "${CMD}" \
+      --plaintext-file="${PLAINDIR}/$f" \
+      --ciphertext-file="${CIPHERDIR/$f" \
+      --location=global \
+      --keyring="${ENV}" \
+      --key="$(basename $f)" \
+      --purpose=encryption \
+      --project=gws-noticeboard
+  fi
+done
+
