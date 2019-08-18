@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -e
+
+SOURCEDIR="${1}"
+
+if [ ! -d ${SOURCEDIR} ]; then
+  echo "No such directory: ${SOURCEDIR}" >&2
+  exit 1
+fi
+
+if [ -d .venv-tmp ]; then
+  rm -fr .venv-tmp
+fi
+
+echo "Creating temporary virtualenv..." >&2
+virtualenv .venv-tmp  2>&1 > /dev/null 
+( . .venv-tmp/bin/activate && \
+  echo "Installing open requirements..." >&2  && \
+  pip install -r "${SOURCEDIR}/requirements-.txt" 2>&1 > /dev/null && \
+  echo "Freezing locked requirements..." >&2  && \
+  pip freeze > "${SOURCEDIR}/requirements.txt" 2>&1 > /dev/null && \
+  deactivate && \
+  rm -fr .venv-tmp
+) || ( rm -fr .venv-tmp )
+
+echo "Done." >&2
+
+

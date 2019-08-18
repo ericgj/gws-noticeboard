@@ -1,3 +1,27 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
+set -e
 
-cd functions && cookiecutter git+ssh://git@bitbucket.org/ericgj/ert-gcf-function-cookiecutter.git 
+FUNC=${1}
+
+if [ -z "${FUNC}" ]; then
+  echo "Usage: ${0} FUNCTION_NAME" >&2
+  exit 1
+fi
+
+echo "Creating function template..." >&2
+cd functions && \
+    cookiecutter git+ssh://git@bitbucket.org/ericgj/ert-gcf-function-cookiecutter.git && \
+    cd ..
+
+echo "Creating service account for function..." >&2
+gcloud iam service-accounts create "gws-noticeboard-${FUNC}" \
+    --project "gws-noticeboard"
+
+echo "Saving key for service account..." >&2
+mkdir -p "secrets/test"
+gcloud iam service-accounts keys create "secrets/test/service-account-{FUNC}.json" \
+    --iam-account "gws-noticeboard-${FUNC}@gws-noticeboard.iam.gserviceaccount.com" \
+    --project "gws-noticeboard"
+    
+echo "Done.' >&2
+

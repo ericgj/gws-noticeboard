@@ -1,20 +1,29 @@
 #!/usr/bin/env bash
+set -e
 
-CMD=${1:-encrypt}
-ENV=${2:-test}
+CMD=${1}
+ENV=${2}
+
+if [ -z "${CMD}" ] || [ -z "${ENV}" ]; then
+    echo "Usage: ${0} encrypt|decrypt ENV" >&2
+    exit 1
+fi
 
 PLAINDIR="secrets/${ENV}"
 CIPHERDIR="secrets.enc/${ENV}"
 
 case "${CMD}" in
   encrypt)
+    SOURCEDIR="${PLAINDIR}"
     DESTDIR="${CIPHERDIR}"
     ;;
   decrypt)
+    SOURCEDIR="${CIPHERDIR}"
     DESTDIR="${PLAINDIR}"
     ;;
   *)
     echo "Unknown command: ${CMD}" >&2
+    echo "Usage: ${0} encrypt|decrypt ENV" >&2
     exit 1
 esac
 
@@ -22,17 +31,19 @@ if [ ! -d "${DESTDIR}" ]; then
   mkdir -p "${DESTDIR}"
 fi
 
-for f in "${SOURCEDIR}"
+for f in ${SOURCEDIR}/*
 do
   if [[ -f $f ]]; then
+    fbase="$(basename $f)"
+    echo "${CMD}ing ${SOURCEDIR}/$fbase ---> ${DESTDIR}/$fbase..." >&2
     gcloud kms "${CMD}" \
-      --plaintext-file="${PLAINDIR}/$f" \
-      --ciphertext-file="${CIPHERDIR/$f" \
+      --plaintext-file="${PLAINDIR}/$fbase" \
+      --ciphertext-file="${CIPHERDIR}/$fbase" \
       --location=global \
       --keyring="${ENV}" \
-      --key="$(basename $f)" \
-      --purpose=encryption \
+      --key=functions \
       --project=gws-noticeboard
   fi
 done
 
+echo "Done." >&2
