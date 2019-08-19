@@ -1,0 +1,6 @@
+FROM python3.7:alpine
+
+RUN pip --no-cache-dir install tox flake8 pytest
+
+ENTRYPOINT ["tox"]
+

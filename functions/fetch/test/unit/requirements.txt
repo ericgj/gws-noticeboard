@@ -1,0 +1,2 @@
+attrs==19.1.0
+hypothesis==4.32.3

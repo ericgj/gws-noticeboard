@@ -18,7 +18,7 @@ virtualenv .venv-tmp  2>&1 > /dev/null
   echo "Installing open requirements..." >&2  && \
   pip install -r "${SOURCEDIR}/requirements-.txt" 2>&1 > /dev/null && \
   echo "Freezing locked requirements..." >&2  && \
-  pip freeze > "${SOURCEDIR}/requirements.txt" 2>&1 > /dev/null && \
+  pip freeze | tee "${SOURCEDIR}/requirements.txt" && \
   deactivate && \
   rm -fr .venv-tmp
 ) || ( rm -fr .venv-tmp )

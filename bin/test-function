@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -e
+
+FUNC=${1}
+ENV=${2}
+
+if [ -z "${FUNC}" ] || [ -z "${ENV}" ]; then
+    echo "Usage: ${0} FUNCTION_NAME ENV" >&2
+    exit 1
+fi
+
+mkdir -p "functions/${FUNC}/secrets/${ENV}"
+cp secrets/${ENV}/* "functions/${FUNC}/secrets/${ENV}/"
+cd "functions/${FUNC}" && tox -e "${ENV}"

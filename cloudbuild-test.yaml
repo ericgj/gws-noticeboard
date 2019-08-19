@@ -6,17 +6,17 @@ steps:
     entrypoint: '/bin/sh'
     args:
     - -c
-    - 'bin/kms decrypt ${_ENV} --project $PROJECT_ID'
+    - 'bin/kms decrypt ${_ENV} --project ${PROJECT_ID}'
 
   # Unit test write function
-  - name: 'python:3.7-alpine'
+  - name: 'gcr.io/${PROJECT_ID}/python-test'
     entrypoint: '/bin/sh'
     args: 
     - -c
     - 'bin/test-function write ${_ENV}'
 
   # Unit test fetch function
-  - name: 'python:3.7-alpine'
+  - name: 'gcr.io/${PROJECT_ID}/python-test'
     entrypoint: '/bin/sh'
     args: 
     - -c
@@ -27,28 +27,28 @@ steps:
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy-function write ${_ENV} --project $PROJECT_ID'
+    - 'bin/deploy-function write ${_ENV} --project ${PROJECT_ID}'
 
   # Deploy fetch function publishing to write (pubsub topic)
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy-function fetch ${_ENV} --publish-topic write --project $PROJECT_ID'
+    - 'bin/deploy-function fetch ${_ENV} --publish-topic write --project ${PROJECT_ID}'
 
   # Deploy default GAE service 
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy-service default ${_ENV} --project $PROJECT_ID
+    - 'bin/deploy-service default ${_ENV} --project ${PROJECT_ID}
   
   # Run system tests
-  - name: 'python:3.7-alpine'
+  - name: 'gcr.io/${PROJECT_ID}/python-test'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/test ${_ENV} --project $PROJECT_ID'
+    - 'bin/test ${_ENV} --project ${PROJECT_ID}'
 
 substitutions:
   _ENV: test
