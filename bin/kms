@@ -1,49 +1,93 @@
-#!/usr/bin/env bash
-set -e
+#!/usr/bin/env python
 
-CMD=${1}
-ENV=${2}
+# Note: python2.7 compatible for gcloud builder
 
-if [ -z "${CMD}" ] || [ -z "${ENV}" ]; then
-    echo "Usage: ${0} encrypt|decrypt ENV" >&2
-    exit 1
-fi
+from __future__ import print_function
+from argparse import ArgumentParser, ArgumentTypeError
+import os
+import os.path
+import subprocess
+import sys
 
-PLAINDIR="secrets/${ENV}"
-CIPHERDIR="secrets.enc/${ENV}"
+def stderr(s):
+    print(s, file=sys.stderr)
 
-case "${CMD}" in
-  encrypt)
-    SOURCEDIR="${PLAINDIR}"
-    DESTDIR="${CIPHERDIR}"
-    ;;
-  decrypt)
-    SOURCEDIR="${CIPHERDIR}"
-    DESTDIR="${PLAINDIR}"
-    ;;
-  *)
-    echo "Unknown command: ${CMD}" >&2
-    echo "Usage: ${0} encrypt|decrypt ENV" >&2
-    exit 1
-esac
+def mkdir_p(d):
+    if os.path.exists(d) and os.path.isdir(d):
+        return
+    os.makedirs(d)
 
-if [ ! -d "${DESTDIR}" ]; then
-  mkdir -p "${DESTDIR}"
-fi
+def parse_cmd(s):
+    if s == 'encrypt' or s == 'decrypt':
+        return s
+    else:
+        raise ArgumentTypeError("Command must be 'encrypt' or 'decrypt'")
 
-for f in ${SOURCEDIR}/*
-do
-  if [[ -f $f ]]; then
-    fbase="$(basename $f)"
-    echo "${CMD}ing ${SOURCEDIR}/$fbase ---> ${DESTDIR}/$fbase..." >&2
-    gcloud kms "${CMD}" \
-      --plaintext-file="${PLAINDIR}/$fbase" \
-      --ciphertext-file="${CIPHERDIR}/$fbase" \
-      --location=global \
-      --keyring="${ENV}" \
-      --key=functions \
-      --project=gws-noticeboard
-  fi
-done
+parser = ArgumentParser(
+    description='Encrypt or decrypt project secrets via Cloud KMS'
+)
+parser.add_argument('cmd', type=str, choices=['encrypt','decrypt'])
+parser.add_argument('env', help='application environment')
+parser.add_argument('--project', default=None, help='GCP project (if not set globally)')
 
-echo "Done." >&2
+def main(argv=sys.argv[1:]):
+    args = parser.parse_args(argv)
+
+    plain_dir = os.path.join('secrets', args.env)
+    cipher_dir = os.path.join('secrets.enc', args.env)
+    
+    source_dir = None
+    dest_dir = None
+
+    if args.cmd == 'encrypt':
+        source_dir = plain_dir
+        dest_dir = cipher_dir
+    elif args.cmd == 'decrypt':
+        source_dir = cipher_dir
+        dest_dir = plain_dir
+
+    mkdir_p(dest_dir)
+
+    for f in os.listdir(source_dir):
+        source_file = os.path.join(source_dir,f)
+        dest_file = os.path.join(dest_dir,f)
+        if os.path.isfile(source_file) and not f.startswith('.'):
+            stderr("%sing %s ---> %s" % (args.cmd, source_file, dest_file))
+            cmdline = (
+                [ 'gcloud',
+                  'kms',
+                  args.cmd,
+                  '--plaintext-file',
+                  os.path.join(plain_dir, f),
+                  '--ciphertext-file',
+                  os.path.join(cipher_dir, f),
+                  '--location',
+                  'global',
+                  '--keyring',
+                  args.env,
+                  '--key',
+                  'functions'
+                ] +
+                ( [] if args.project is None 
+                  else ['--project', args.project]
+                )
+            )
+
+            subprocess.check_call(
+                cmdline, 
+                shell=False, 
+                stdout=sys.stdout, 
+                stderr=sys.stderr
+            )
+
+    stderr("Done.")
+
+ 
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as e:
+        # raise e
+        exit(e)   
+                
+

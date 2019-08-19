@@ -4,7 +4,7 @@ steps:
     entrypoint: '/bin/sh'
     args:
     - -c
-    - 'bin/kms decrypt ${_ENV}'
+    - 'bin/kms decrypt ${_ENV} --project $PROJECT_ID'
 
   - name: 'python:3.7-alpine'
     entrypoint: '/bin/sh'
@@ -19,19 +19,18 @@ steps:
     - 'bin/test-function fetch ${_ENV}'
 
   # Fetch next app state (blue or green) based on GAE traffic split
-  # (Note: I think you can run python2.7 from this builder)
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: '/bin/sh'
     args:
     - -c
-    - 'bin/fetch-app-state ${_ENV} --service default --next > app-state.txt'
+    - 'bin/fetch-app-state ${_ENV} --next --service default --project $PROJECT_ID > app-state.txt'
 
   # Deploy write function given next blue/green app state
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy-function write ${_ENV} "$(cat app-state.txt)"'
+    - 'bin/deploy-function write ${_ENV} --app-state "$(cat app-state.txt)" --project $PROJECT_ID'
 
   # Deploy fetch function given next blue/green app state
   # publishing to write (pubsub topic)
@@ -39,14 +38,14 @@ steps:
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy-function fetch ${_ENV} "$(cat app-state.txt)" write'
+    - 'bin/deploy-function fetch ${_ENV} --app-state "$(cat app-state.txt)" --publish-topic write --project $PROJECT_ID'
 
   # Deploy default GAE service given next blue/green app state
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy-service default ${_ENV} "$(cat app-state.txt)"'
+    - 'bin/deploy-service default ${_ENV} --app-state "$(cat app-state.txt)" --project $PROJECT_ID'
 
 substitutions:
   _ENV: staging
