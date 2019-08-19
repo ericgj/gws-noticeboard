@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -e
+
+SUBDIR=${1}
+NAME=${2}
+ENV=${3-test}
+
+if [ -z "${SUBDIR}" ] || [ -z "${NAME}" ]; then
+    echo "Error: missing parameter(s)." >&2
+    echo "    Usage: ${0} TYPE NAME [ENV]" >&2
+    echo "    Example: ${0} functions myfunction staging"  >&2
+    exit 1
+fi
+
+mkdir -p "${SUBDIR}/${NAME}/secrets/${ENV}"
+cp secrets/${ENV}/* "${SUBDIR}/${NAME}/secrets/${ENV}/"
+
+cd "${SUBDIR}/${NAME}"
+
+if [ ! -d .venv ]; then
+    echo "Creating virtual environment for testing..." >&2
+    virtualenv .venv  2>&1 > /dev/null
+    echo "Installing testing requirements..." >&2
+    . .venv/bin/activate && pip install -r test/requirements.txt 2>&1 > /dev/null
+fi
+
+echo "Installing function requirements..." >&2
+. .venv/bin/activate
+pip install -r src/requirements.txt
+
+echo "Running tests..."  >&2
+PYTHONPATH=src:test pytest test
+
+echo "Done." >&2

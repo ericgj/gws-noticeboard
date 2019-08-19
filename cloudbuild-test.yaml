@@ -9,18 +9,18 @@ steps:
     - 'bin/kms decrypt ${_ENV} --project ${PROJECT_ID}'
 
   # Unit test write function
-  - name: 'gcr.io/${PROJECT_ID}/python-test'
+  - name: 'gcr.io/cloud-builders/docker'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/test-function write ${_ENV}'
+    - 'bin/test functions write ${_ENV}'
 
   # Unit test fetch function
-  - name: 'gcr.io/${PROJECT_ID}/python-test'
+  - name: 'gcr.io/cloud-builders/docker'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/test-function fetch ${_ENV}'
+    - 'bin/test functions fetch ${_ENV}'
 
   # Deploy write function
   - name: 'gcr.io/cloud-builders/gcloud'
@@ -44,11 +44,11 @@ steps:
     - 'bin/deploy-service default ${_ENV} --project ${PROJECT_ID}
   
   # Run system tests
-  - name: 'gcr.io/${PROJECT_ID}/python-test'
+  - name: 'gcr.io/cloud-builders/docker'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/test ${_ENV} --project ${PROJECT_ID}'
+    - 'bin/test-api ${PROJECT_ID} ${_ENV}'
 
 substitutions:
   _ENV: test

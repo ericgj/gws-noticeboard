@@ -1,7 +1,7 @@
 from hypothesis import given, settings
 
 from model.article import Article
-from test.unit.util.fetch import request_examples
+from test.util.fetch import request_examples
 
 
 @given(request=request_examples())

@@ -1,27 +1,40 @@
 #!/usr/bin/env bash
 set -e
 
-SOURCEDIR="${1}"
+SUBDIR="${1}"
+NAME="${2}"
 
-if [ ! -d ${SOURCEDIR} ]; then
-  echo "No such directory: ${SOURCEDIR}" >&2
+if [ -z "${SUBDIR}" ] || [ -z "${NAME}" ]; then
+  echo "Error: missing parameter(s)." >&2
+  echo "    Usage: ${0} TYPE NAME"  >&2
+  echo "    Example: ${0} functions myfunction"  >&2
   exit 1
 fi
 
-if [ -d .venv-tmp ]; then
-  rm -fr .venv-tmp
+ROOTDIR="${SUBDIR}/${NAME}"
+
+if [ ! -d ${ROOTDIR} ]; then
+  echo "No such directory: ${ROOTDIR}" >&2
+  exit 1
 fi
 
-echo "Creating temporary virtualenv..." >&2
-virtualenv .venv-tmp  2>&1 > /dev/null 
-( . .venv-tmp/bin/activate && \
-  echo "Installing open requirements..." >&2  && \
-  pip install -r "${SOURCEDIR}/requirements-.txt" 2>&1 > /dev/null && \
-  echo "Freezing locked requirements..." >&2  && \
-  pip freeze | tee "${SOURCEDIR}/requirements.txt" && \
-  deactivate && \
-  rm -fr .venv-tmp
-) || ( rm -fr .venv-tmp )
+for r in src test 
+do
+    if [ -d .venv-tmp ]; then
+      rm -fr .venv-tmp
+    fi
+
+    echo "Creating temporary virtualenv..." >&2
+    ( virtualenv .venv-tmp  2>&1 > /dev/null 
+      . .venv-tmp/bin/activate && \
+      echo "Installing open requirements...$r" >&2  && \
+      pip install -r "${ROOTDIR}/$r/requirements-.txt" 2>&1 > /dev/null && \
+      echo "Freezing locked requirements...$r" >&2  && \
+      pip freeze | tee "${ROOTDIR}/$r/requirements.txt" && \
+      deactivate && \
+      rm -fr .venv-tmp
+    ) || ( rm -fr .venv-tmp )
+done
 
 echo "Done." >&2
 

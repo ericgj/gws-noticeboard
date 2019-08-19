@@ -1,6 +1,6 @@
-FROM python3.7:alpine
+FROM python:3.7-slim
 
-RUN pip --no-cache-dir install tox flake8 pytest
+RUN pip --no-cache-dir install tox flake8 mypy pytest
 
-ENTRYPOINT ["tox"]
+ENTRYPOINT ["pytest"]
 

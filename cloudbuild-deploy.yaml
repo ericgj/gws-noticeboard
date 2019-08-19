@@ -6,17 +6,17 @@ steps:
     - -c
     - 'bin/kms decrypt ${_ENV} --project ${PROJECT_ID}'
 
-  - name: 'gcr.io/${PROJECT_ID}/python-test'
+  - name: 'gcr.io/cloud-builders/docker'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/test-function write ${_ENV}'
+    - 'bin/test functions write ${_ENV}'
 
-  - name: 'gcr.io/${PROJECT_ID}/python-test'
+  - name: 'gcr.io/cloud-builders/docker'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/test-function fetch ${_ENV}'
+    - 'bin/test functions fetch ${_ENV}'
 
   # Fetch next app state (blue or green) based on GAE traffic split
   - name: 'gcr.io/cloud-builders/gcloud'

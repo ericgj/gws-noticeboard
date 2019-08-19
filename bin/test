@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -e
+
+SUBDIR=${1}
+NAME=${2}
+ENV=${3-test}
+
+if [ -z "${SUBDIR}" ] || [ -z "${NAME}" ]; then
+    echo "Error: missing parameter(s)." >&2
+    echo "    Usage: ${0} TYPE NAME [ENV]" >&2
+    echo "    Example: ${0} functions myfunction staging"  >&2
+    exit 1
+fi
+
+mkdir -p "${SUBDIR}/${NAME}/secrets/${ENV}"
+cp secrets/${ENV}/* "${SUBDIR}/${NAME}/secrets/${ENV}/"
+
+cd "${SUBDIR}/${NAME}"
+
+echo "Building test container..." >&2
+docker build -f "images/test" -t "${NAME}:test" .
+
+echo "Running tests..." >&2
+docker run "${NAME}:test"
+
+echo "Done." >&2
