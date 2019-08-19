@@ -1,0 +1,172 @@
+#!/usr/bin/env python
+
+# Note: python2.7 compatible for gcloud builder
+
+from __future__ import print_function
+from argparse import ArgumentParser
+import os
+import os.path
+import subprocess
+import sys
+
+
+def stderr(s):
+    print(s, file=sys.stderr)
+
+
+def mkdir_p(d):
+    if os.path.exists(d) and os.path.isdir(d):
+        return
+    os.makedirs(d)
+
+
+APP_STATE_TYPES = (None, "blue", "green")
+
+FUNCTION_TYPES = [
+    f for f in os.listdir("functions") if os.path.isdir(os.path.join("functions", f))
+]
+
+FUNCTION_TRIGGER_TYPES = ["pubsub", "http", "bucket"]
+
+SERVICE_TYPES = [
+    f for f in os.listdir("services") if os.path.isdir(os.path.join("services", f))
+]
+
+
+def main(parser, argv=sys.argv[1:]):
+    args = parser.parse_args(argv)
+    args.func(args)
+
+
+def deploy_function(args):
+    func_name = contextual_name(args.function, args.env, args.app_state)
+    topic_name = None
+    if args.publish_topic is not None:
+        topic_name = contextual_name(args.publish_topic, args.env, args.app_state)
+        stderr("Creating topic %s if it doesn't exist..." % (topic_name,))
+        create_publish_topic_if_not_exists(topic_name, args.project)
+
+    entry_point_opts = ["--entry-point", args.function]
+
+    source_opts = ["--source", os.path.join("functions", args.function, "src")]
+
+    trigger_opts = []
+    if args.trigger == "pubsub":
+        trigger_opts = ["--trigger-topic", func_name]
+    elif args.trigger == "http":
+        trigger_opts = ["--trigger-http"]
+    elif args.trigger == "bucket":
+        trigger_opts = ["--trigger-bucket", func_name]
+
+    set_env_opts = [
+        "--set-env-vars",
+        ",".join(
+            [
+                "APP_ENV=%s" % (args.env,),
+                "APP_PUBLISH_TOPIC=%s" % (("" if topic_name is None else topic_name),),
+            ]
+        ),
+    ]
+
+    service_account_opts = (
+        []
+        if args.project is None
+        else [
+            "--service-account",
+            "%s-%s@%s.iam.gserviceaccount.com"
+            % (args.project, args.function, args.project),
+        ]
+    )
+
+    project_opts = [] if args.project is None else ["--project", args.project]
+
+    stderr("Deploying function %s..." % (func_name,))
+    subprocess.check_call(
+        ["gcloud", "functions", "deploy", func_name, "--runtime", "python37"]
+        + entry_point_opts
+        + source_opts
+        + trigger_opts
+        + set_env_opts
+        + service_account_opts
+        + project_opts,
+        shell=False,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+    )
+
+    stderr("Done.")
+
+
+def contextual_name(base_name, env, app_state=None):
+    return ("%s_%s" % (base_name, env)) + (
+        "" if app_state is None else "_%s" % (app_state,)
+    )
+
+
+def deploy_service(args):
+    raise NotImplementedError()
+
+
+def create_publish_topic_if_not_exists(topic, project=None):
+    project_opts = [] if project is None else ["--project", project]
+    rc = subprocess.call(
+        ["gcloud", "pubsub", "topics", "create", topic] + project_opts,
+        shell=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    if not rc == 0:
+        subprocess.check_call(
+            ["gcloud", "pubsub", "topics", "describe", topic] + project_opts,
+            shell=False,
+            stdout=subprocess.PIPE,
+            stderr=sys.stderr,
+        )
+
+
+def add_common_options(p):
+    p.add_argument("env", help="application environment")
+    p.add_argument(
+        "--app-state",
+        default=None,
+        choices=APP_STATE_TYPES,
+        help="target application environment state (leave None for test environments)",
+    )
+    p.add_argument("--publish-topic", default=None, help="Pubsub topic published to")
+    p.add_argument("--project", default=None, help="GCP project (if not set globally)")
+
+
+parser = ArgumentParser(description="Deploy functions and services")
+subparser = parser.add_subparsers()
+
+function_parser = subparser.add_parser(
+    "functions", description="Deploy Google Cloud Function"
+)
+function_parser.add_argument(
+    "function", type=str, choices=FUNCTION_TYPES, help="function name"
+)
+function_parser.add_argument(
+    "--trigger",
+    type=str,
+    default="pubsub",
+    choices=FUNCTION_TRIGGER_TYPES,
+    help="function trigger type",
+)
+add_common_options(function_parser)
+function_parser.set_defaults(func=deploy_function)
+
+service_parser = subparser.add_parser(
+    "services", description="Deploy Google App Engine service"
+)
+service_parser.add_argument("service", type=str, choices=SERVICE_TYPES)
+add_common_options(service_parser)
+service_parser.set_defaults(func=deploy_service)
+
+
+if __name__ == "__main__":
+    try:
+        main(parser)
+    except Exception as e:
+        # raise e
+        exit(e)
