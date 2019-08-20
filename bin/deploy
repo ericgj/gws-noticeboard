@@ -39,7 +39,7 @@ def main(parser, argv=sys.argv[1:]):
 
 
 def deploy_function(args):
-    func_name = contextual_name(args.function, args.env, args.app_state)
+    func_name = contextual_name(args.function, args.env, args.app_state, separator="_")
     topic_name = None
     if args.publish_topic is not None:
         topic_name = contextual_name(args.publish_topic, args.env, args.app_state)
@@ -97,9 +97,11 @@ def deploy_function(args):
     stderr("Done.")
 
 
-def contextual_name(base_name, env, app_state=None):
-    return ("%s_%s" % (base_name, env)) + (
-        "" if app_state is None else "_%s" % (app_state,)
+def contextual_name(base_name, env, app_state=None, separator="-"):
+    return (
+        separator.join([base_name, env])
+        if app_state is None
+        else separator.join([base_name, env, app_state])
     )
 
 
