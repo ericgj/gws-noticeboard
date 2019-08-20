@@ -1,9 +1,0 @@
-
-steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/${PROJECT_ID}/python-test', '-f', 'images/python-test', '.']
-
-images: 
-  - 'gcr.io/${PROJECT_ID}/python-test'
-
-

@@ -1,6 +1,6 @@
 FROM python:3.7-slim
 
-RUN pip --no-cache-dir install tox flake8 mypy pytest
+RUN pip --no-cache-dir install pytest
 
 ENTRYPOINT ["pytest"]
 

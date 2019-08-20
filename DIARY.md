@@ -2,6 +2,7 @@
 
 An automation and news curation tool for busy organizers 
 
+--------------------------------------------------------------------------------
 _17 Aug 2019_
 
 ## One obvious thing is missing from both Functions and Run
@@ -103,6 +104,7 @@ be all we need to do.
 
 
 
+--------------------------------------------------------------------------------
 _16 Aug 2019_
 
 ## Functions vs Run
@@ -190,6 +192,7 @@ Note `_ENV` and `_FUNCTION_NAME` are determined by Cloud Build triggers.
 
 
 
+--------------------------------------------------------------------------------
 _14 Aug 2019_
 
 ## Rethinking the platform
@@ -285,6 +288,7 @@ _If_ we're able to use `cloud-build-local` to run a test cloudbuild config file
 env vars via _substitutions_ on the command line. 
 
 
+--------------------------------------------------------------------------------
 _12 Aug 2019_
 
 ## Devops considerations
