@@ -30,7 +30,7 @@ steps:
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy-function write ${_ENV} --app-state "$(cat app-state.txt)" --project ${PROJECT_ID}'
+    - 'bin/deploy functions write ${_ENV} --app-state "$(cat app-state.txt)" --project ${PROJECT_ID}'
 
   # Deploy fetch function given next blue/green app state
   # publishing to write (pubsub topic)
@@ -38,14 +38,14 @@ steps:
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy-function fetch ${_ENV} --app-state "$(cat app-state.txt)" --publish-topic write --project ${PROJECT_ID}'
+    - 'bin/deploy functions fetch ${_ENV} --app-state "$(cat app-state.txt)" --publish-topic write --project ${PROJECT_ID}'
 
   # Deploy default GAE service given next blue/green app state
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy-service default ${_ENV} --app-state "$(cat app-state.txt)" --project ${PROJECT_ID}'
+    - 'bin/deploy services default ${_ENV} --app-state "$(cat app-state.txt)" --project ${PROJECT_ID}'
 
 substitutions:
   _ENV: staging

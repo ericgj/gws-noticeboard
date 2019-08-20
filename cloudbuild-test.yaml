@@ -27,21 +27,21 @@ steps:
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy-function write ${_ENV} --project ${PROJECT_ID}'
+    - 'bin/deploy functions write ${_ENV} --project ${PROJECT_ID}'
 
   # Deploy fetch function publishing to write (pubsub topic)
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy-function fetch ${_ENV} --publish-topic write --project ${PROJECT_ID}'
+    - 'bin/deploy functions fetch ${_ENV} --publish-topic write --project ${PROJECT_ID}'
 
   # Deploy default GAE service 
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy-service default ${_ENV} --project ${PROJECT_ID}
+    - 'bin/deploy services default ${_ENV} --project ${PROJECT_ID}
   
   # Run system tests
   - name: 'gcr.io/cloud-builders/docker'
