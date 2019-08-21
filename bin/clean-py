@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+set -e
+
+changed=$(git diff --name-only | grep "\.py$")
+if [ ! -z "$changed" ]; then
+  echo "Running flake8..." >&2
+  echo "$changed" | xargs flake8
+  echo "Running black..." >&2
+  echo "$changed" | xargs black
+  echo "Done." >&2
+fi
+
+

@@ -1,3 +1,4 @@
+from datetime import timedelta
 import hypothesis.strategies as hyp
 
 from model.article import Request
@@ -15,3 +16,28 @@ SAMPLE_URLS = [
 
 def request_examples(urls=SAMPLE_URLS):
     return hyp.builds(Request, url=hyp.sampled_from(urls), note=hyp.none() | hyp.text())
+
+
+def article_data_examples(urls=SAMPLE_URLS, dates_near=None, dates_range=(7, 7)):
+    if dates_near is None:
+        date_gen = hyp.dates().map(lambda d: d.strftime("%Y-%m-%d"))
+    else:
+        min_value = dates_near - timedelta(days=dates_range[0])
+        max_value = dates_near + timedelta(days=dates_range[1])
+        date_gen = hyp.dates(min_value=min_value, max_value=max_value).map(
+            lambda d: d.strftime("%Y-%m-%d")
+        )
+
+    return hyp.fixed_dictionaries(
+        {
+            "url": hyp.sampled_from(urls),
+            "title": hyp.text(),
+            "authors": hyp.lists(hyp.text()),
+            "text": hyp.text(),
+            "html": hyp.text(),
+            "publish_date": hyp.none() | date_gen,
+            "summary": hyp.none() | hyp.text(),
+            "site_name": hyp.none() | hyp.text(),
+            "note": hyp.none() | hyp.text(),
+        }
+    )

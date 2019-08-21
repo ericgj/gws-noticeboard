@@ -17,4 +17,4 @@ def create_topics(client, project_id, topics):
 
 def publish(client, project_id, topic, data):
     encoded = json.dumps(data).encode("utf-8")
-    client.publish( client.topic_path(project_id, topic), encoded)
+    client.publish(client.topic_path(project_id, topic), encoded)

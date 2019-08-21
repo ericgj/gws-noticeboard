@@ -71,7 +71,11 @@ class Article:
             summary=d.get("summary", None),
             text=d["text"],
             html=d["html"],
-            publish_date=date_.decode(d["publish_date"]),
+            publish_date=(
+                None
+                if d.get("publish_date", None) is None
+                else date_.decode(d["publish_date"])
+            ),
         )
 
     def to_json(self):
@@ -85,7 +89,9 @@ class Article:
             "summary": self.summary,
             "text": self.text,
             "html": self.html,
-            "publish_date": date_.encode(self.publish_date),
+            "publish_date": (
+                None if self.publish_date is None else date_.encode(self.publish_date)
+            ),
         }
 
     def first_author(self):

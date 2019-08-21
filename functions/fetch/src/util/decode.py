@@ -2,6 +2,7 @@ from base64 import b64decode
 from functools import wraps
 import json
 
+
 class DecodeFailure(Exception):
     def __init__(self, klass, value, error):
         self.klass = klass
@@ -20,7 +21,7 @@ def decoded_base64(decoder, encoding="utf-8"):
     def _decoded_base64(fn):
         @wraps(fn)
         def __decoded_base64(msg, *args, **kwargs):
-            s = b64decode(msg['data']).decode(encoding)
+            s = b64decode(msg["data"]).decode(encoding)
             # print(s)
             value = json.loads(s)
             return decoded(decoder)(fn)(value, *args, **kwargs)

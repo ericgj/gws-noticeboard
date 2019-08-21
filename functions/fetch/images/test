@@ -2,7 +2,8 @@ FROM gcr.io/gws-noticeboard/python-test
 
 COPY ./ /
 
-RUN pip --no-cache-dir install -r src/requirements.txt -r test/requirements.txt
+RUN pip --no-cache-dir --disable-pip-version-check install \
+      -r src/requirements.txt -r test/requirements.txt
 
 ENV PYTHONPATH src:test
 

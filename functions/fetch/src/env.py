@@ -14,8 +14,10 @@ from adapter import pubsub
 def project_id():
     return os.environ["GCP_PROJECT"]
 
+
 def function_name():
     return os.environ.get("FUNCTION_NAME", function_target())
+
 
 @assert_environ(["FUNCTION_TARGET"])
 def function_target():
@@ -25,9 +27,11 @@ def function_target():
 def service_account_file():
     return os.environ.get("APP_SERVICE_ACCOUNT", None)
 
+
 @assert_environ(["APP_ENV"])
 def environment():
     return os.environ["APP_ENV"]
+
 
 @assert_environ(["APP_PUBLISH_TOPIC"])
 def publish_topic():
@@ -61,10 +65,10 @@ def service_account_credentials(scopes=None):
 # PubSub
 # ------------------------------------------------------------------------------
 
+
 def pubsub_client():
     return pubsub.publisher_client(service_account_credentials())
 
+
 def publish(msg):
     return pubsub.publish(pubsub_client(), project_id(), publish_topic(), msg)
-    
-
