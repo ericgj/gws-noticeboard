@@ -25,7 +25,7 @@ def test_(reqdata):
 
 def init_environ():
     """ Note this service account has editor access to all topics/subs """
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = 'secrets/test/service-account.json'
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = 'secrets/test/service-accounts/project.json'
 
 def trigger(data):
     client = pubsub.publisher_client()

@@ -87,10 +87,7 @@ def deploy_function(args, project):
         ",".join(["%s=%s" % (k, v) for (k, v) in env_vars]),
     ]
 
-    service_account_opts = (
-        "--service-account",
-        service_account_name % (project, args.function, project),
-    )
+    service_account_opts = ["--service-account", service_account_name]
 
     project_opts = ["--project", project]
 

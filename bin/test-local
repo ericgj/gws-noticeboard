@@ -12,8 +12,9 @@ if [ -z "${SUBDIR}" ] || [ -z "${NAME}" ]; then
     exit 1
 fi
 
+rm -fr "${SUBDIR}/${NAME}/secrets/${ENV}"
 mkdir -p "${SUBDIR}/${NAME}/secrets/${ENV}"
-cp secrets/${ENV}/* "${SUBDIR}/${NAME}/secrets/${ENV}/"
+cp -r secrets/${ENV}/* "${SUBDIR}/${NAME}/secrets/${ENV}/"
 
 cd "${SUBDIR}/${NAME}"
 

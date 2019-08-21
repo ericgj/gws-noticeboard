@@ -8,8 +8,9 @@ if [ -z "${PROJ}" ]; then
     exit 1
 fi
 
+rm -fr "api/secrets/test"
 mkdir -p "api/secrets/test"
-cp secrets/test/* "api/secrets/test/"
+cp -r secrets/test/* "api/secrets/test/"
 
 cd ./api
 

@@ -32,32 +32,23 @@ def mkdir_p(d):
 
 parser = ArgumentParser(description="Encrypt or decrypt project secrets via Cloud KMS")
 parser.add_argument("cmd", type=str, choices=["encrypt", "decrypt"])
-parser.add_argument("env", default="project", help="application environment")
-
+parser.add_argument("--env", default="default", 
+    help="application environment or 'default' for project-wide"
+)
+parser.add_argument("--key", default="default", 
+    help="key type (e.g. 'service-accounts') or 'default' for environment-wide"
+)
 
 def main(argv=sys.argv[1:]):
     args = parser.parse_args(argv)
 
     project = get_project()
 
-    plain_dir = None
-    cipher_dir = None
-    keyring = None
-    key = None
-    if args.env == "project":
-        plain_dir = "secrets"
-        cipher_dir = "secrets.enc"
-        keyring = "project"
-        key = "project"
-    else:
-        plain_dir = os.path.join("secrets", args.env)
-        cipher_dir = os.path.join("secrets.enc", args.env)
-        keyring = args.env
-        key = "functions"
+    plain_dir = key_path(args.env, args.key, "secrets")
+    cipher_dir = key_path(args.env, args.key, "secrets.enc")
 
     source_dir = None
     dest_dir = None
-
     if args.cmd == "encrypt":
         source_dir = plain_dir
         dest_dir = cipher_dir
@@ -84,9 +75,9 @@ def main(argv=sys.argv[1:]):
                 "--location",
                 "global",
                 "--keyring",
-                keyring,
+                args.env,
                 "--key",
-                key,
+                args.key,
                 "--project",
                 project,
             ]
@@ -97,6 +88,10 @@ def main(argv=sys.argv[1:]):
 
     stderr("Done.")
 
+def key_path(keyring, key, prefix):
+    return os.path.join(*[
+        p for p in [ prefix, keyring, key ] if not p == 'default'
+    ])
 
 if __name__ == "__main__":
     try:
