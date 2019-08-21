@@ -8,20 +8,27 @@ if [ -z "${FUNC}" ]; then
   exit 1
 fi
 
+PROJ=$(cat secrets/project)
+
+if [ -z "${PROJ}" ]; then
+    echo "Project not found. Check secrets/project file." >&2
+    exit 1
+fi
+
 echo "Creating function template..." >&2
 cd functions && \
     cookiecutter git+ssh://git@bitbucket.org/ericgj/ert-gcf-function-cookiecutter.git && \
     cd ..
 
 echo "Creating service account for function..." >&2
-gcloud iam service-accounts create "gws-noticeboard-${FUNC}" \
-    --project "gws-noticeboard"
+gcloud iam service-accounts create "${PROJ}-${FUNC}" \
+    --project "${PROJ}"
 
 echo "Saving key for service account..." >&2
 mkdir -p "secrets/test"
 gcloud iam service-accounts keys create "secrets/test/service-account-${FUNC}.json" \
-    --iam-account "gws-noticeboard-${FUNC}@gws-noticeboard.iam.gserviceaccount.com" \
-    --project "gws-noticeboard"
+    --iam-account "${PROJ}-${FUNC}@${PROJ}.iam.gserviceaccount.com" \
+    --project "${PROJ}"
     
 echo "Done." >&2
 

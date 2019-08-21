@@ -3,7 +3,7 @@
 # Note: python2.7 compatible for gcloud builder
 
 from __future__ import print_function
-from argparse import ArgumentParser, ArgumentTypeError
+from argparse import ArgumentParser
 import os
 import os.path
 import subprocess
@@ -12,6 +12,16 @@ import sys
 
 def stderr(s):
     print(s, file=sys.stderr)
+
+
+def get_project():
+    try:
+        proj = open("secrets/project").read().strip()
+        if len(proj) == 0:
+            exit("Project not found. Is your secrets/project file empty?")
+        return proj
+    except OSError:
+        exit("Project not found. Check secrets/project file.")
 
 
 IMAGE_TYPES = [
@@ -23,9 +33,7 @@ IMAGE_TYPES = [
 
 def main(parser, argv=sys.argv[1:]):
     args = parser.parse_args(argv)
-    project = args.project if args.project is not None else gcloud_current_project()
-    if project is None:
-        raise ArgumentTypeError("Please specify a project or set it globally in gcloud")
+    project = get_project()
 
     for image in args.images:
         stderr("Building image %s..." % (image,))
@@ -35,20 +43,6 @@ def main(parser, argv=sys.argv[1:]):
         gcloud_push_image(image_tag)
 
     stderr("Done.")
-
-
-def gcloud_current_project():
-    cmd = ["gcloud", "config", "get-value", "project"]
-    p = subprocess.Popen(
-        cmd, shell=False, stderr=subprocess.PIPE, stdout=subprocess.PIPE
-    )
-    outp, _ = p.communicate()
-    outp = ("" if outp is None else outp).strip()
-    if not p.returncode == 0:
-        raise subprocess.CalledProcessError(
-            cmd=cmd, returncode=p.returncode, output=outp
-        )
-    return outp if len(outp) > 0 else None
 
 
 def gcloud_build_image(project, image):
@@ -72,7 +66,6 @@ def gcloud_push_image(image_tag):
 parser = ArgumentParser(
     description="Rebuild base images for project. Rebuild all if none specified"
 )
-parser.add_argument("--project", default=None, help="GCP project (if not set globally)")
 parser.add_argument("images", nargs="*", default=IMAGE_TYPES)
 
 

@@ -2,11 +2,11 @@
 set -e
 
 SUBDIR="${1}"
-NAME="${2}"
+NAME="${2-}"
 
-if [ -z "${SUBDIR}" ] || [ -z "${NAME}" ]; then
+if [ -z "${SUBDIR}" ]; then
   echo "Error: missing parameter(s)." >&2
-  echo "    Usage: ${0} TYPE NAME"  >&2
+  echo "    Usage: ${0} TYPE [NAME]"  >&2
   echo "    Example: ${0} functions myfunction"  >&2
   exit 1
 fi

@@ -6,7 +6,7 @@ steps:
     entrypoint: '/bin/sh'
     args:
     - -c
-    - 'bin/kms decrypt ${_ENV} --project ${PROJECT_ID}'
+    - 'bin/kms decrypt ${_ENV}'
 
   # Unit test write function
   - name: 'gcr.io/cloud-builders/docker'
@@ -27,21 +27,21 @@ steps:
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy functions write ${_ENV} --project ${PROJECT_ID}'
+    - 'bin/deploy functions write ${_ENV}'
 
   # Deploy fetch function publishing to write (pubsub topic)
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy functions fetch ${_ENV} --publish-topic write --project ${PROJECT_ID}'
+    - 'bin/deploy functions fetch ${_ENV} --publish-topic write'
 
   # Deploy default GAE service 
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy services default ${_ENV} --project ${PROJECT_ID}
+    - 'bin/deploy services default ${_ENV}' 
   
   # Run system tests
   - name: 'gcr.io/cloud-builders/docker'

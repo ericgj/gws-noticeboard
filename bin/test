@@ -12,15 +12,23 @@ if [ -z "${SUBDIR}" ] || [ -z "${NAME}" ]; then
     exit 1
 fi
 
+PROJ=$(cat secrets/project)
+
+if [ -z "${PROJ}" ]; then
+    echo "Project not found. Check secrets/project file." >&2
+    exit 1
+fi
+
+
 mkdir -p "${SUBDIR}/${NAME}/secrets/${ENV}"
 cp secrets/${ENV}/* "${SUBDIR}/${NAME}/secrets/${ENV}/"
 
 cd "${SUBDIR}/${NAME}"
 
 echo "Building test container..." >&2
-docker build -f "images/test" -t "gws-noticeboard/test/${SUBDIR}/${NAME}" .
+docker build -f "images/test" -t "${PROJ}/test/${SUBDIR}/${NAME}" .
 
 echo "Running tests..." >&2
-docker run "gws-noticeboard/test/${SUBDIR}/${NAME}"
+docker run "${PROJ}/test/${SUBDIR}/${NAME}"
 
 echo "Done." >&2

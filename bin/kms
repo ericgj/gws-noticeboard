@@ -14,6 +14,16 @@ def stderr(s):
     print(s, file=sys.stderr)
 
 
+def get_project():
+    try:
+        proj = open("secrets/project").read().strip()
+        if len(proj) == 0:
+            exit("Project not found. Is your secrets/project file empty?")
+        return proj
+    except OSError:
+        exit("Project not found. Check secrets/project file.")
+
+
 def mkdir_p(d):
     if os.path.exists(d) and os.path.isdir(d):
         return
@@ -22,15 +32,28 @@ def mkdir_p(d):
 
 parser = ArgumentParser(description="Encrypt or decrypt project secrets via Cloud KMS")
 parser.add_argument("cmd", type=str, choices=["encrypt", "decrypt"])
-parser.add_argument("env", help="application environment")
-parser.add_argument("--project", default=None, help="GCP project (if not set globally)")
+parser.add_argument("env", default="project", help="application environment")
 
 
 def main(argv=sys.argv[1:]):
     args = parser.parse_args(argv)
 
-    plain_dir = os.path.join("secrets", args.env)
-    cipher_dir = os.path.join("secrets.enc", args.env)
+    project = get_project()
+
+    plain_dir = None
+    cipher_dir = None
+    keyring = None
+    key = None
+    if args.env == "project":
+        plain_dir = "secrets"
+        cipher_dir = "secrets.enc"
+        keyring = "project"
+        key = "project"
+    else:
+        plain_dir = os.path.join("secrets", args.env)
+        cipher_dir = os.path.join("secrets.enc", args.env)
+        keyring = args.env
+        key = "functions"
 
     source_dir = None
     dest_dir = None
@@ -47,6 +70,7 @@ def main(argv=sys.argv[1:]):
     for f in os.listdir(source_dir):
         source_file = os.path.join(source_dir, f)
         dest_file = os.path.join(dest_dir, f)
+
         if os.path.isfile(source_file) and not f.startswith("."):
             stderr("%sing %s ---> %s" % (args.cmd, source_file, dest_file))
             cmdline = [
@@ -60,10 +84,12 @@ def main(argv=sys.argv[1:]):
                 "--location",
                 "global",
                 "--keyring",
-                args.env,
+                keyring,
                 "--key",
-                "functions",
-            ] + ([] if args.project is None else ["--project", args.project])
+                key,
+                "--project",
+                project,
+            ]
 
             subprocess.check_call(
                 cmdline, shell=False, stdout=sys.stdout, stderr=sys.stderr

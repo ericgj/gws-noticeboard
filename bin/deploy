@@ -14,6 +14,16 @@ def stderr(s):
     print(s, file=sys.stderr)
 
 
+def get_project():
+    try:
+        proj = open("secrets/project").read().strip()
+        if len(proj) == 0:
+            exit("Project not found. Is your secrets/project file empty?")
+        return proj
+    except OSError:
+        exit("Project not found. Check secrets/project file.")
+
+
 def mkdir_p(d):
     if os.path.exists(d) and os.path.isdir(d):
         return
@@ -35,28 +45,25 @@ SERVICE_TYPES = [
 
 def main(parser, argv=sys.argv[1:]):
     args = parser.parse_args(argv)
-    args.func(args)
+    args.func(args, get_project())
 
 
-def deploy_function(args):
+def deploy_function(args, project):
     func_name = contextual_name(args.function, args.env, args.app_state, separator="_")
     sub_name = contextual_name(args.function, args.env, args.app_state)
     bucket_name = sub_name
     topic_name = None
+    service_account_name = service_account_for(args.function, project)
 
     if args.trigger == "pubsub" and args.publish_topic is not None:
         topic_name = contextual_name(args.publish_topic, args.env, args.app_state)
 
         stderr("Creating topic %s if it doesn't exist..." % (topic_name,))
-        create_publish_topic_if_not_exists(topic_name, args.project)
-
-        project = args.project
-        if project is None:
-            project = gcloud_current_project()
+        create_publish_topic_if_not_exists(topic_name, project)
 
         stderr("Authorizing service account to publish to topic %s..." % (topic_name,))
         authorize_service_account_to_publish_to(
-            topic_name, service_account_for(args.function, project), project
+            topic_name, service_account_name, project
         )
 
     entry_point_opts = ["--entry-point", args.function]
@@ -81,16 +88,11 @@ def deploy_function(args):
     ]
 
     service_account_opts = (
-        []
-        if args.project is None
-        else [
-            "--service-account",
-            "%s-%s@%s.iam.gserviceaccount.com"
-            % (args.project, args.function, args.project),
-        ]
+        "--service-account",
+        service_account_name % (project, args.function, project),
     )
 
-    project_opts = [] if args.project is None else ["--project", args.project]
+    project_opts = ["--project", project]
 
     stderr("Deploying function %s..." % (func_name,))
     subprocess.check_call(
@@ -121,8 +123,8 @@ def deploy_service(args):
     raise NotImplementedError()
 
 
-def create_publish_topic_if_not_exists(topic, project=None):
-    project_opts = [] if project is None else ["--project", project]
+def create_publish_topic_if_not_exists(topic, project):
+    project_opts = ["--project", project]
     rc = subprocess.call(
         ["gcloud", "pubsub", "topics", "create", topic] + project_opts,
         shell=False,
@@ -143,8 +145,8 @@ def service_account_for(email, project):
     return "%s-%s@%s.iam.gserviceaccount.com" % (project, email, project)
 
 
-def authorize_service_account_to_publish_to(topic, email, project=None):
-    project_opts = [] if project is None else ["--project", project]
+def authorize_service_account_to_publish_to(topic, email, project):
+    project_opts = ["--project", project]
     subprocess.check_call(
         ["gcloud", "beta", "pubsub", "topics", "add-iam-policy-binding", topic]
         + ["--member", "serviceAccount:%s" % (email,)]
@@ -156,21 +158,8 @@ def authorize_service_account_to_publish_to(topic, email, project=None):
     )
 
 
-def gcloud_current_project():
-    cmd = ["gcloud", "config", "get-value", "project"]
-    p = subprocess.Popen(
-        cmd, shell=False, stderr=subprocess.PIPE, stdout=subprocess.PIPE
-    )
-    outp, _ = p.communicate()
-    outp = ("" if outp is None else outp).strip()
-    if not p.returncode == 0:
-        raise subprocess.CalledProcessError(
-            cmd=cmd, returncode=p.returncode, output=outp
-        )
-    return outp if len(outp) > 0 else None
-
-
 # ---------------------------------
+
 
 def add_common_options(p):
     p.add_argument("env", help="application environment")
@@ -181,7 +170,6 @@ def add_common_options(p):
         help="target application environment state (leave None for test environments)",
     )
     p.add_argument("--publish-topic", default=None, help="Pubsub topic published to")
-    p.add_argument("--project", default=None, help="GCP project (if not set globally)")
 
 
 parser = ArgumentParser(description="Deploy functions and services")
