@@ -55,7 +55,7 @@ def gcloud_build_image(project, image):
     image_tag = "gcr.io/%s/%s" % (project, image)
     image_file = "images/%s" % (image,)
     subprocess.check_call(
-        ["docker", "build", "-t", image_tag, "-f", image_file, "."],
+        ["docker", "build", "-t", image_tag, "-f", image_file, "./images"],
         shell=False,
         stdout=sys.stdout,
         stderr=sys.stderr,

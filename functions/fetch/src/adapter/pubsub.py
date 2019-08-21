@@ -1,4 +1,3 @@
-from base64 import b64encode
 import json
 from google.cloud import pubsub_v1
 
@@ -16,6 +15,6 @@ def create_topics(client, project_id, topics):
             client.create_topic(t)
 
 
-def publish(client, topic, data):
-    encoded = b64encode(json.dumps(data).encode("utf-8"))
-    client.publish(topic, encoded)
+def publish(client, project_id, topic, data):
+    encoded = json.dumps(data).encode("utf-8")
+    client.publish( client.topic_path(project_id, topic), encoded)

@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+set -e
+
+mkdir -p "api/secrets/test"
+cp secrets/test/* "api/secrets/test/"
+
+cd ./api
+
+echo "Building test container..." >&2
+docker build -f "images/test" -t "gws-noticeboard/test/api" .
+
+echo "Running tests..." >&2
+docker run "gws-noticeboard/test/api"
+
+echo "Done." >&2

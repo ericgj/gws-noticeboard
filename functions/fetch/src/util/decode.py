@@ -1,6 +1,6 @@
-from functools import wraps
 from base64 import b64decode
-
+from functools import wraps
+import json
 
 class DecodeFailure(Exception):
     def __init__(self, klass, value, error):
@@ -19,8 +19,10 @@ class DecodeFailure(Exception):
 def decoded_base64(decoder, encoding="utf-8"):
     def _decoded_base64(fn):
         @wraps(fn)
-        def __decoded_base64(raw, *args, **kwargs):
-            value = b64decode(raw).decode(encoding)
+        def __decoded_base64(msg, *args, **kwargs):
+            s = b64decode(msg['data']).decode(encoding)
+            # print(s)
+            value = json.loads(s)
             return decoded(decoder)(fn)(value, *args, **kwargs)
 
         return __decoded_base64

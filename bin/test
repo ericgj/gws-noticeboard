@@ -18,9 +18,9 @@ cp secrets/${ENV}/* "${SUBDIR}/${NAME}/secrets/${ENV}/"
 cd "${SUBDIR}/${NAME}"
 
 echo "Building test container..." >&2
-docker build -f "images/test" -t "${NAME}:test" .
+docker build -f "images/test" -t "gws-noticeboard/test/${SUBDIR}/${NAME}" .
 
 echo "Running tests..." >&2
-docker run "${NAME}:test"
+docker run "gws-noticeboard/test/${SUBDIR}/${NAME}"
 
 echo "Done." >&2

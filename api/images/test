@@ -1,0 +1,12 @@
+FROM python:3.7-slim
+
+COPY ./ /
+
+RUN pip --no-cache-dir install pytest -r requirements.txt
+
+ENV PYTHONPATH=test
+
+ENTRYPOINT ["pytest"]
+
+CMD ["test"]
+

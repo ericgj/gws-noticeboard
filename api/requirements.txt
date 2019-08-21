@@ -1,0 +1,5 @@
+pytest
+hypothesis
+google-auth
+google-cloud-pubsub
+
