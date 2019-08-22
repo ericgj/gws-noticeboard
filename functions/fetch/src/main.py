@@ -1,5 +1,6 @@
 from util.decode import decoded_base64
-from model.article import Request, Article
+from model.article import Request
+from adaper import browser
 
 import env
 
@@ -11,4 +12,4 @@ def fetch(req, ctx):
 
 
 def fetch_value(req):
-    return Article.fetch(req)
+    return browser.fetch(req)

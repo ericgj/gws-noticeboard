@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -e
 
-changed=$(git diff --name-only | grep "\.py$")
+changed=$(git ls-files -mo --exclude-per-directory=.gitignore | grep "\.py$")
 if [ ! -z "$changed" ]; then
   echo "Running flake8..." >&2
   echo "$changed" | xargs flake8

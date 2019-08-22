@@ -11,6 +11,9 @@ SAMPLE_URLS = [
     "https://www.greatfallstribune.com/story/news/local/2015/04/16/grandparents-protest-child-protective-services/25904331",
     "https://theintercept.com/2019/08/07/el-paso-border-war-terror/",
     "https://www.washingtonpost.com/lifestyle/2019/08/09/caught-between-young-kids-parent-with-alzheimers-i-found-lifeline-playground/",
+    "https://www.nytimes.com/2019/08/20/us/california-police-use-of-force-law.html",
+    "https://www.bloomberg.com/news/articles/2019-08-19/oil-companies-persuade-states-to-make-pipeline-protests-a-felony",
+    "https://medium.com/brepairers/10-statistics-worse-than-the-trade-deficit-3a0352d3090d",
 ]
 
 
