@@ -2,6 +2,271 @@
 
 An automation and news curation tool for busy organizers 
 
+
+--------------------------------------------------------------------------------
+_24 Aug 2019_
+
+## Code (re)organization
+
+The point is to allow _multiple deployments of functions and services per
+bounded context_.
+
+Here is the basic GCP deployment stuff:
+
+    api-test
+      |---- images
+      |---- test
+    bin
+    images
+    secrets
+    secrets.enc
+    cloudbuild-deploy.yaml
+    cloudbuild-test.yaml
+
+Then instead of 'functions', 'services':
+
+    domain
+      |---- Article
+              |---- adapter               # shared external interfaces
+                      |---- pubsub.py
+                      |---- datastore.py
+                      |---- wsgi.py
+              |---- env                   # environment bindings per component
+                      |---- app.py
+                      |---- core.py
+                      |---- fetch.py
+              |---- model                 # shared models
+                      |---- command.py
+                      |---- article.py
+              |---- test                  # tests per component
+                      |---- app
+                      |---- core
+                      |---- fetch
+              |---- util                  # shared utils
+
+              |---- app.py                # UI (GAE service)
+              |---- app.yaml              # GAE deployment config for UI
+              |---- core.py               # core article update (function)
+              |---- fetch.py              # fetch/clean (domain service)
+
+
+And `app`, `core`, `fetch` could have their own code under `app/`, `core/`, 
+`fetch/` etc.
+
+This *almost* works, having multiple deployment targets - multiple entrypoints -
+within the same directory. With one problem: the requirements.txt file. Yes,
+you could have one requirements.txt that covers everything, but it seems
+wasteful to e.g. install gunicorn for the functions, or conversely to install
+newspaper and markdown for anything except `fetch`. And that waste adds time
+every time you test.
+
+Trying again:
+
+    domain
+      |---- Article
+              |---- shared
+                      |---- adapter               # shared external interfaces
+                              |---- pubsub.py
+                              |---- datastore.py
+                              |---- wsgi.py
+                      |---- model                 # shared models
+                              |---- command.py
+                              |---- article.py
+                      |---- util                  # shared utils
+              |---- Core
+                      |---- images
+                              |---- test
+                      |---- src
+                      |---- test
+                              |---- requirements.txt
+                      |---- env.py
+                      |---- main.py
+                      |---- requirements.txt
+              |---- Fetch
+                      |---- images
+                              |---- test
+                      |---- src
+                      |---- test
+                              |---- requirements.txt
+                      |---- env.py
+                      |---- main.py
+                      |---- requirements.txt
+              |---- UI
+                      |---- images
+                              |---- test
+                      |---- frontend
+                      |---- src
+                      |---- test
+                              |---- requirements.txt
+                      |---- env.py
+                      |---- main.py
+                      |---- app.yaml
+                      |---- requirements.txt
+
+
+This has the advantage of being very similar to the current structure, but
+with the additional layer of the 'bounded context' (e.g., Article) to which the
+functions and apps belong.
+
+The key question though is how to make the shared code accessible to each
+component (under src/ of each)? 
+
+1. **Git submodules.** This is probably the "preferred professional method"
+at the moment. It means easy editing and syncing from within each component.
+But comes with some complexity, including when you deploy.
+
+2. **Package as a library.** Clunkier for editing, and same complexity when
+you deploy and have to deal with private repos.
+
+3. **Copy folders on test and deploy.** You could copy in the shared code
+when building the test containers, and during Cloud Build prior to deploy. 
+This means no local testing outside of containers. And editing may be slightly
+cumbersome since you have to pop out of the component.
+
+If we went with #3, we'd probably want to move out the container images for
+testing like so:
+
+    domain
+      |---- Article
+              |---- images
+                      |---- Core
+                              |---- test
+                      |---- Fetch
+                              |---- test
+                      |---- UI
+                              |---- test
+
+
+Then something like this for their content (assuming it will be run from
+`domain/Article`):
+
+    FROM gcr.io/my-project/python-test
+
+    COPY Core/ /
+
+    COPY shared/ /Core/src/
+
+    ... etc.
+
+Or actually maybe move the images to the very top level:
+
+    images
+      |---- domain
+              |---- Article
+                      |---- Core
+                              |---- test
+                      |---- Fetch
+                              |---- test
+                      |---- UI
+                              |---- test
+
+
+Then we could deal with the secrets copying at the same time:
+
+    FROM gcr.io/my-project/python-test
+
+    COPY domain/Article/Core/ /
+
+    COPY domain/Article/shared/ /src/
+
+    COPY secrets/test/ /secrets/
+
+    ... etc.
+
+
+Note we likely will want to have secrets organized per bounded context rather
+than per function/service.
+
+
+
+_21-23 Aug 2019_
+
+## Back from the serverless frontier... what is this thing again?
+
+Basically the idea is to automate a process now carried out manually. Someone
+sends a link to an article on email, perhaps with some excerpts or a comment.
+These links, or some curated set of them, are gathered together each week and
+formatted to go out in a "Noticeboard" email, to a selected group. One issue is 
+that many mainstream news sources are paywalled so to make it accessible, key 
+articles have to be copy-pasted into email and sent around by those who do have 
+access.  (None of this violates terms of service BTW.)
+
+The automation deals with both the gathering process and the paywall issue. 
+The email is polled (IMAP), parsed into links and comments/excerpts, sent
+through the 'fetch' function (which I have drafted) to download and clean the
+article, and into the 'write' function to save it somewhere. A website serves
+this content as a weekly list of links and/or RSS feed, with the ability to
+curate i.e. filter. Another scheduled task gathers these weekly lists into a
+formatted email to send to a list of recipients.
+
+## Next steps
+
+As always the focal point is - what would make the system immediately more 
+useful than it is now? In this case, considering I can be the "first user",
+I think the most likely candidate is the frontend for displaying article lists. 
+We have a way (clunky, it's true) to publish. If we have a way of rendering
+saved article links, we can copy-paste into an email just like that, and that
+will be a big step forward from manual formatting.
+
+From a devops perspective, this will also flesh out service (i.e. GAE app)
+deployment and interaction with PubSub.
+
+But first we need to deal with storage, i.e. the write function. 
+
+## The write function is not actually a good thing to isolate, is it?
+
+Right off the bat there are a few, likely interconnected, weaknesses that 
+indicate the conceptual organization is a bit ... myopic:
+
+1. Difficult to share models between the write and the read sides, when there
+is no obvious need for the storage to be split CQRS style;
+
+2. Unclear why we can't just store the article in-process after we fetch it; 
+what is the aim of putting a queue abstraction here?
+
+3. The actual process we want is probably more like: write un-fetched link to
+storage; kick off asynchronous fetch/clean; update model once fetched/cleaned.
+
+From the point of view of code organization, we really want all the models 
+and storage adapters etc. used within a bounded context to be together - to use 
+the DDD jargon. Right now the code is oriented towards the platform instead, 
+i.e. encapsulated within individual functions or services. 
+
+In this case we are talking about the bounded context of the 
+_requested article_. It's quite basic, so difficult to see what the 
+"constraints" of this context are that we are "protecting", but it seems there
+are two or possibly three states: requested, fetched, and cleaned, or maybe
+fetched and cleaned are the same state. If we center the code then around 
+updating article state, we can see that there is not just one "write" operation,
+but at least 2 and maybe 3. There may be more operations in the future. 
+
+Implementation-wise, let's say this core bounded context is a GCP function.
+Then the pubsub queue that it's listening to (and there can only be one) has
+to "mux" the update operations: in other (DDD) words, it has to be _commands_ 
+coming in, not just entities. The fetch/clean function I think is best concept-
+ualized as what DDD calls a _domain_ service: it shares the domain models. 
+
+It's an interesting question whether or not it itself writes back commands
+(e.g. "store fetched article") to the core function input queue. If we think
+about the Elm architecture here, it's still the application's responsibility
+to `Sub.map` subscription results back into `Msg` -- not the external service
+writing data back to the incoming port.  But here, to accomplish that mapping
+we'd need a separate function listening on a separate pubsub queue coming in
+from the fetch/clean service, whose only job is to insert the payload into a
+command structure to send along into the core function. All this seems very
+wasteful and unnecessary. My vote is to have domain services know about 
+constructing commands themselves, so they can just write directly back to the
+command queue.
+
+An alternative is to consider the fetch/clean function as an external service.
+It does not after all require any domain logic - it is purely technical from
+the point of view of the users. This is kind of where I was headed with it
+so far. But the problem is what I just raised: you then need a piece of code
+(perhaps an http callback instead of a pubsub subscription) to deal with 
+translating its results back into domain commands. Code is not cheap in a 
+distributed system.
+
+
 --------------------------------------------------------------------------------
 _17 Aug 2019_
 
