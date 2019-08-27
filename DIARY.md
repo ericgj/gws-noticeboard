@@ -2,6 +2,15 @@
 
 An automation and news curation tool for busy organizers 
 
+--------------------------------------------------------------------------------
+_27 Aug 2019_
+
+## Shared folders issues
+
+Jamming the shared folders into a docker container for testing is one thing,
+but deployment requires you get all the shared stuff together in the real file 
+system, which means -- sorry to say -- a local build step. _Or_ we try git
+submodules. But I really don't want to do that.
 
 --------------------------------------------------------------------------------
 _24 Aug 2019_

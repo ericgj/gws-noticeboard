@@ -1,0 +1,21 @@
+FROM gcr.io/gws-noticeboard/python-test
+
+ARG service
+
+COPY $service/src/requirements.txt /src/
+
+COPY $service/test/requirements.txt /test/
+
+RUN pip --no-cache-dir --disable-pip-version-check install \
+      -r src/requirements.txt -r test/requirements.txt
+
+COPY $service/ /
+
+COPY shared /src/shared
+
+ENV PYTHONPATH src:test
+
+ENTRYPOINT ["pytest"]
+
+CMD ["test"]
+

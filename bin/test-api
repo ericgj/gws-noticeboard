@@ -8,16 +8,14 @@ if [ -z "${PROJ}" ]; then
     exit 1
 fi
 
-rm -fr "api/secrets/test"
-mkdir -p "api/secrets/test"
-cp -r secrets/test/* "api/secrets/test/"
-
-cd ./api
+rm -fr test/secrets
+mkdir -p test/secrets/test
+cp -r secrets/test test/secrets/test
 
 echo "Building test container..." >&2
-docker build -f "images/test" -t "${PROJ}/test/api" .
+docker build -f "images/test-api" -t "${PROJ}/test" ./test
 
 echo "Running tests..." >&2
-docker run "${PROJ}/test/api"
+docker run "${PROJ}/test"
 
 echo "Done." >&2

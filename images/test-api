@@ -1,0 +1,16 @@
+FROM gcr.io/gws-noticeboard/python-test
+
+COPY test/requirements.txt /test/
+
+RUN pip --no-cache-dir --disable-pip-version-check install \
+    -r test/requirements.txt
+
+COPY ./ /
+
+ENV PYTHONPATH .
+
+ENTRYPOINT ["pytest"]
+
+CMD ["."]
+
+

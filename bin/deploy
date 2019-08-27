@@ -32,15 +32,11 @@ def mkdir_p(d):
 
 APP_STATE_TYPES = (None, "blue", "green")
 
-FUNCTION_TYPES = [
-    f for f in os.listdir("functions") if os.path.isdir(os.path.join("functions", f))
+SUBDOM_TYPES = [
+    f for f in os.listdir("domain") if os.path.isdir(os.path.join("domain", f))
 ]
 
 FUNCTION_TRIGGER_TYPES = ["pubsub", "http", "bucket"]
-
-SERVICE_TYPES = [
-    f for f in os.listdir("services") if os.path.isdir(os.path.join("services", f))
-]
 
 
 def main(parser, argv=sys.argv[1:]):
@@ -49,14 +45,14 @@ def main(parser, argv=sys.argv[1:]):
 
 
 def deploy_function(args, project):
-    func_name = contextual_name(args.function, args.env, args.app_state, separator="_")
-    sub_name = contextual_name(args.function, args.env, args.app_state)
+    func_name = contextual_name(args.subdom, args.function, args.env, args.app_state, separator="_")
+    sub_name = contextual_name(args.subdom, args.function, args.env, args.app_state)
     bucket_name = sub_name
     topic_name = None
-    service_account_name = service_account_for(args.function, project)
+    service_account_name = service_account_for(args.subdom, project)
 
     if args.trigger == "pubsub" and args.publish_topic is not None:
-        topic_name = contextual_name(args.publish_topic, args.env, args.app_state)
+        topic_name = contextual_name(args.subdom, args.publish_topic, args.env, args.app_state)
 
         stderr("Creating topic %s if it doesn't exist..." % (topic_name,))
         create_publish_topic_if_not_exists(topic_name, project)
@@ -68,7 +64,7 @@ def deploy_function(args, project):
 
     entry_point_opts = ["--entry-point", args.function]
 
-    source_opts = ["--source", os.path.join("functions", args.function, "src")]
+    source_opts = ["--source", os.path.join("domain", args.subdom, args.function, "src")]
 
     trigger_opts = []
     if args.trigger == "pubsub":
@@ -108,11 +104,11 @@ def deploy_function(args, project):
     stderr("Done.")
 
 
-def contextual_name(base_name, env, app_state=None, separator="-"):
+def contextual_name(subdom_name, base_name, env, app_state=None, separator="-"):
     return (
-        separator.join([base_name, env])
+        separator.join([subdom_name, base_name, env])
         if app_state is None
-        else separator.join([base_name, env, app_state])
+        else separator.join([subdom_name, base_name, env, app_state])
     )
 
 
@@ -169,15 +165,14 @@ def add_common_options(p):
     p.add_argument("--publish-topic", default=None, help="Pubsub topic published to")
 
 
-parser = ArgumentParser(description="Deploy functions and services")
+parser = ArgumentParser(description="Deploy domain functions and services")
 subparser = parser.add_subparsers()
 
 function_parser = subparser.add_parser(
     "functions", description="Deploy Google Cloud Function"
 )
-function_parser.add_argument(
-    "function", type=str, choices=FUNCTION_TYPES, help="function name"
-)
+function_parser.add_argument("subdom", type=str, choices=SUBDOM_TYPES, help="subdomain")
+function_parser.add_argument("function", type=str, help="function")
 function_parser.add_argument(
     "--trigger",
     type=str,
@@ -191,7 +186,8 @@ function_parser.set_defaults(func=deploy_function)
 service_parser = subparser.add_parser(
     "services", description="Deploy Google App Engine service"
 )
-service_parser.add_argument("service", type=str, choices=SERVICE_TYPES)
+function_parser.add_argument("subdom", type=str, choices=SUBDOM_TYPES, help="subdomain")
+function_parser.add_argument("service", type=str, help="service")
 add_common_options(service_parser)
 service_parser.set_defaults(func=deploy_service)
 

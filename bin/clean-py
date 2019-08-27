@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 set -e
 
-changed=$(git ls-files -mo --exclude-per-directory=.gitignore | grep "\.py$")
-if [ ! -z "$changed" ]; then
+changed=$(git ls-files -mo --exclude-per-directory=.gitignore | grep "\.py$" | ( xargs -d '\n' find 2>/dev/null || exit 0 ) )
+if [ ! -z "${changed}" ]; then
   echo "Running flake8..." >&2
   echo "$changed" | xargs flake8
   echo "Running black..." >&2
