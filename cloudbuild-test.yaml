@@ -1,3 +1,4 @@
+# Note: WIP
 
 steps:
   
@@ -6,50 +7,54 @@ steps:
     entrypoint: '/bin/sh'
     args:
     - -c
-    - 'bin/kms decrypt ${_ENV}'
+    - 'bin/kms decrypt test'
 
-  # Unit test write function
+  # Unit test core function
   - name: 'gcr.io/cloud-builders/docker'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/test functions write ${_ENV}'
+    - 'bin/build Article Core && bin/test Article Core'
 
   # Unit test fetch function
   - name: 'gcr.io/cloud-builders/docker'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/test functions fetch ${_ENV}'
+    - 'bin/build Article Fetch && bin/test Article Fetch'
 
-  # Deploy write function
+  # Deploy core main function
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy functions write ${_ENV}'
+    - 'bin/build Article Core && bin/deploy function Article Core test'
 
-  # Deploy fetch function publishing to write (pubsub topic)
+  # Deploy core handle_fetched function
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy functions fetch ${_ENV} --publish-topic write'
+    - 'bin/build Article Core && bin/deploy function Article Core test --entry-point handle_fetched --subscribe Fetch'
+
+  # Deploy fetch main function 
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: '/bin/sh'
+    args: 
+    - -c
+    - 'bin/build Article Fetch && bin/deploy function Article Fetch test --subscribe Core'
 
   # Deploy default GAE service 
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/deploy services default ${_ENV}' 
+    - 'bin/build Article UI && bin/deploy app Article UI test --publish Core' 
   
   # Run system tests
   - name: 'gcr.io/cloud-builders/docker'
     entrypoint: '/bin/sh'
     args: 
     - -c
-    - 'bin/test-api ${PROJECT_ID} ${_ENV}'
-
-substitutions:
-  _ENV: test
+    - 'bin/test-api'
 

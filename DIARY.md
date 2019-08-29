@@ -3,6 +3,46 @@
 An automation and news curation tool for busy organizers 
 
 --------------------------------------------------------------------------------
+_28 Aug 2019_
+
+## A new proposal for DDD-style services, cleaned up
+
+### Basic definitions
+
+_Bounded contexts_ are the rules governing state changes for a given subdomain.
+
+A given bounded context has one or more _aggregates_ whose state it manages.
+
+_Services_ are the implementation of bounded contexts in the form of 
+inter-communicating processes. Bounded contexts are implemented by one or
+more services.
+
+There are different kinds of services performing different roles within a
+bounded context. There are also generic services that are used independently
+of a bounded context, or by several bounded contexts.
+
+### Implementation
+
+Generally speaking, services have input and output streams, but these vary
+by the role of the service. 
+
+- Typically services that manage state (**"Core" services**) have _command 
+input_ and _event output_. They also may have _event input_ from other 
+services and convert that into command input. 
+
+- **Support services** that do not manage state have _event input_ from 
+other services and produce _event output_ of their own. 
+
+- Services that send user input into core services (**"UI" or "Command" 
+services**) have _external input_ (e.g. through an http endpoint) and send 
+_command output_.
+
+In this proposed implementation on top of GCP, _services_ are implemented
+by Cloud Functions and/or App Engine instances (and potentially Cloud Run 
+containers), communicating via Cloud PubSub.
+
+
+
 _27 Aug 2019_
 
 ## Shared folders issues
@@ -11,6 +51,108 @@ Jamming the shared folders into a docker container for testing is one thing,
 but deployment requires you get all the shared stuff together in the real file 
 system, which means -- sorry to say -- a local build step. _Or_ we try git
 submodules. But I really don't want to do that.
+
+## The process
+
+> The actual process we want is probably more like: write un-fetched link to
+>  storage; kick off asynchronous fetch/clean; update model once fetched/cleaned.
+
+It occurs to me another eventing mechanism is Cloud Storage, if we use that for
+storage. I don't like being locked in to that; but on the other hand, then we
+don't need that custom async messaging between Core -> Fetch -> Core. We just
+need a function that listens for changes to storage and dispatches commands
+to Core depending on current state. The direction is 
+
+`UI -> Core -> Fetch -> storage -> Core`.  
+
+The other thing is I don't think we actually need to store the thing until it's 
+fetched. Or do we, because what do we do with the user-provided note?
+
+`UI -> Core -> storage -> Core -> Fetch -> storage -> Core`.  
+
+But the thing there is, both Core and Fetch write to storage. That's a faint
+coupling smell in itself, but then you consider that Fetch actually needs to
+write not just the article text, but the author, title, publish date, etc.
+Which most likely do not belong in Cloud Storage. Or do they?
+
+## How do we want to search?
+
+Cloud Storage is of course not designed for search. You can do something like
+store the searchable data indexed in Datastore but just store a key that points
+to the article actually stored in Cloud Storage. _Or_ you can store everything
+in Cloud Storage but sync it to BigQuery for search. 
+
+In either case I'm wondering what exactly is the utility of Cloud Storage. We
+are not talking about large files (although possibly if we download photos
+from articles that would make sense for them). If we are just concerned with
+the eventing mechanism, why not just use PubSub?
+
+## A new proposal
+
+    UI -> Core -> datastore
+               -> pubsub     -> Fetch -> pubsub -> Core -> datastore
+                                                        -> pubsub
+
+It's not obvious from this primitive diagram, but essentially we have 
+
+1. Core in charge of making changes to stored state (writing to datastore). 
+
+2. Whenever Core updates state, it publishes an event to a pubsub topic.
+
+3. Fetch and perhaps other services listen for events on this topic, and write 
+back events to another topic.
+
+4. Core listens for events on Fetch's (and other) topics, converts them to 
+commands and sends them through its main function.
+
+This is the same as before, except we reduce the coupling between Fetch and
+Core. 
+
+Also note that `Core` may have to listen to more than one pubsub topic,
+(actually _will_ have to, assuming UI sends commands to Core via pubsub) -- 
+which means that Cloud Functions are not going to be suitable. It's possible
+to deploy them as different functions sharing the same codebase I suppose. 
+
+
+### Naming conventions
+
+    Publishing func          Pubsub topic            Subscribing func
+    ----------------------------------------------------------------------------
+    article_ui_main          -> article.core.command -> article_core_main
+
+    article_core_main        -> article.core.event   -> article_fetch_from_core
+
+    article_fetch_from_core  -> article.fetch.event  -> article_core_from_fetch
+
+    article_core_from_fetch  -> article.core.event
+
+
+Rules:
+
+1. If nothing specified for a trigger, it's assumed to be 
+   `<subdom>.<service>.command`.
+2. Otherwise it can be specified like `--subscribe-subdomain`, 
+   `--subscribe-service`, which if different than the subscribing func, assumes 
+   the "topic type" is `event`.
+3. If nothing specified for a publish topic, it's assumed to be 
+   `<subdom>.<service>.event`. In fact, services should not publish to anything
+   other than this. Regardless of entry point. **EXCEPT!** UI services get
+   special privileges to send commands to other services -- typically to _core_. 
+
+The underlying structure is, each service writes _events_ to a single topic; and 
+receives _commands_ from a single topic, and _events_ from zero or more
+topics from other services. Furthermore, usually only the "core" function in
+a subdomain receives commands. Technical services that do not manage state 
+themselves (such as fetch) act based on events from core and other services,
+not commands.
+
+Because Cloud Functions must be bound to one triggering topic, if we implement
+services using Cloud Functions, they must be split up between different 
+triggering topics.
+
+Of course, all these names are also modulated by `ENV` and `APP_STATE`.
+
+
 
 --------------------------------------------------------------------------------
 _24 Aug 2019_

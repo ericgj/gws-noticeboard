@@ -1,0 +1,32 @@
+#!/usr/bin/env sh
+set -e
+
+SUBDOM=${1}
+SERVICE=${2}
+ENV=${3-test}
+BUILDDIR=${4-build}
+
+if [ -z "${SUBDOM}" ] || [ -z "${SERVICE}" ]; then
+    echo "Usage: ${0} SUBDOMAIN SERVICE [ENV] [BUILDDIR]" >&2
+    exit 1
+fi
+
+echo "Copying source..." >&2 
+rm -fr "${BUILDDIR}"   
+mkdir -p "${BUILDDIR}"  
+cp -r domain/${SUBDOM}/${SERVICE}/* "${BUILDDIR}/"  
+
+echo "Copying shared source..." >&2  
+mkdir -p "${BUILDDIR}/src"  
+cp -r "domain/${SUBDOM}/shared" "${BUILDDIR}/src/"  
+
+echo "Copying domain shared source..." >&2  
+mkdir -p "${BUILDDIR}/src/domain"  
+cp -r "domain/shared" "${BUILDDIR}/src/domain/"  
+
+echo "Copying secrets..." >&2  
+mkdir -p "${BUILDDIR}/secrets"  
+cp -r "secrets/${ENV}" "${BUILDDIR}/secrets/" 
+
+echo "Done." >&2
+

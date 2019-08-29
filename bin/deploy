@@ -3,7 +3,7 @@
 # Note: python2.7 compatible for gcloud builder
 
 from __future__ import print_function
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentTypeError
 import os
 import os.path
 import subprocess
@@ -37,47 +37,63 @@ SUBDOM_TYPES = [
 ]
 
 FUNCTION_TRIGGER_TYPES = ["pubsub", "http", "bucket"]
+MESSAGE_TYPE_COMMAND = "command"
+MESSAGE_TYPE_EVENT = "event"
+
+
+# ------------------------------------------------------------------------------
+# MAIN
+# ------------------------------------------------------------------------------
 
 
 def main(parser, argv=sys.argv[1:]):
     args = parser.parse_args(argv)
+    # run_build(args)
     args.func(args, get_project())
 
 
+"""
+def run_build(args):
+    subprocess.check_call(["bin/build", args.subdom, args.service, args.env, args.build_dir])
+"""
+
+
 def deploy_function(args, project):
-    func_name = contextual_name(args.subdom, args.function, args.env, args.app_state, separator="_")
-    sub_name = contextual_name(args.subdom, args.function, args.env, args.app_state)
-    bucket_name = sub_name
-    topic_name = None
+    sub_subdomain, sub_service, sub_message_type = parse_subscribe_args(args)
+    pub_subdomain, pub_service, pub_message_type = parse_publish_args(args)
+
+    entry_point = args.service.lower() if args.entry_point is None else args.entry_point
+
+    func_name = gcf_function_name(
+        subdomain=args.subdom,
+        service=args.service,
+        entry_point=entry_point,
+        env=args.env,
+        app_state=args.app_state,
+    )
+    sub_name = gcf_pubsub_topic_name(
+        subdomain=sub_subdomain,
+        service=sub_service,
+        message_type=sub_message_type,
+        env=args.env,
+        app_state=args.app_state,
+    )
+    pub_name = gcf_pubsub_topic_name(
+        subdomain=pub_subdomain,
+        service=pub_service,
+        message_type=pub_message_type,
+        env=args.env,
+        app_state=args.app_state,
+    )
     service_account_name = service_account_for(args.subdom, project)
 
-    if args.trigger == "pubsub" and args.publish_topic is not None:
-        topic_name = contextual_name(args.subdom, args.publish_topic, args.env, args.app_state)
+    entry_point_opts = ["--entry-point", entry_point]
 
-        stderr("Creating topic %s if it doesn't exist..." % (topic_name,))
-        create_publish_topic_if_not_exists(topic_name, project)
+    source_opts = ["--source", os.path.join(args.build_dir, "src")]
 
-        stderr("Authorizing service account to publish to topic %s..." % (topic_name,))
-        authorize_service_account_to_publish_to(
-            topic_name, service_account_name, project
-        )
+    trigger_opts = ["--trigger-topic", sub_name]
 
-    entry_point_opts = ["--entry-point", args.function]
-
-    source_opts = ["--source", os.path.join("domain", args.subdom, args.function, "src")]
-
-    trigger_opts = []
-    if args.trigger == "pubsub":
-        trigger_opts = ["--trigger-topic", sub_name]
-    elif args.trigger == "http":
-        trigger_opts = ["--trigger-http"]
-    elif args.trigger == "bucket":
-        trigger_opts = ["--trigger-bucket", bucket_name]
-
-    env_vars = [
-        ("APP_ENV", args.env),
-        ("APP_PUBLISH_TOPIC", ("" if topic_name is None else topic_name)),
-    ]
+    env_vars = [("APP_ENV", args.env), ("APP_PUBLISH_TOPIC", pub_name)]
     set_env_opts = [
         "--set-env-vars",
         ",".join(["%s=%s" % (k, v) for (k, v) in env_vars]),
@@ -86,6 +102,12 @@ def deploy_function(args, project):
     service_account_opts = ["--service-account", service_account_name]
 
     project_opts = ["--project", project]
+
+    stderr("Creating topic %s if it doesn't exist..." % (pub_name,))
+    create_pubsub_topic_if_not_exists(pub_name, project)
+
+    stderr("Authorizing service account to publish to topic %s..." % (pub_name,))
+    authorize_service_account_to_publish_to(pub_name, service_account_name, project)
 
     stderr("Deploying function %s..." % (func_name,))
     subprocess.check_call(
@@ -104,19 +126,23 @@ def deploy_function(args, project):
     stderr("Done.")
 
 
-def contextual_name(subdom_name, base_name, env, app_state=None, separator="-"):
-    return (
-        separator.join([subdom_name, base_name, env])
-        if app_state is None
-        else separator.join([subdom_name, base_name, env, app_state])
-    )
+def gcf_function_name(*, subdomain, service, entry_point, env, app_state=None):
+    name = "_".join([part.lower() for part in (subdomain, service, entry_point)])
+    mod = "--".join([part.lower() for part in (env, app_state) if part is not None])
+    return "--".join([name, mod])
 
 
-def deploy_service(args):
+def gcf_pubsub_topic_name(*, subdomain, service, message_type, env, app_state=None):
+    name = ".".join([part.lower() for part in (subdomain, service, message_type)])
+    mod = "--".join([part.lower() for part in (env, app_state) if part is not None])
+    return "--".join([name, mod])
+
+
+def deploy_app(args):
     raise NotImplementedError()
 
 
-def create_publish_topic_if_not_exists(topic, project):
+def create_pubsub_topic_if_not_exists(topic, project):
     project_opts = ["--project", project]
     rc = subprocess.call(
         ["gcloud", "pubsub", "topics", "create", topic] + project_opts,
@@ -134,8 +160,12 @@ def create_publish_topic_if_not_exists(topic, project):
         )
 
 
-def service_account_for(email, project):
-    return "%s-%s@%s.iam.gserviceaccount.com" % (project, email, project)
+def service_account_for(subdom, project):
+    return "%s-%s@%s.iam.gserviceaccount.com" % (
+        project.lower(),
+        subdom.lower(),
+        project.lower(),
+    )
 
 
 def authorize_service_account_to_publish_to(topic, email, project):
@@ -151,50 +181,118 @@ def authorize_service_account_to_publish_to(topic, email, project):
     )
 
 
-# ---------------------------------
+def parse_subscribe_args(args):
+    parts = []
+    if args.subscribe is None:
+        parts = [args.subdom, args.service]
+    else:
+        parts = args.subscribe.split(".")
+
+    if len(parts) == 1:
+        sub_subdomain = args.subdom
+        sub_service = parts[0]
+    elif len(parts) == 2:
+        sub_subdomain = parts[0]
+        sub_service = parts[1]
+    else:
+        raise ArgumentTypeError(
+            "Argument --subscribe should be in the format [SUBDOMAIN.]SERVICE"
+        )
+
+    sub_message_type = None
+    if args.subscribe_type is None:
+        sub_message_type = (
+            MESSAGE_TYPE_COMMAND
+            if sub_subdomain == args.subdom and sub_service == args.service
+            else MESSAGE_TYPE_EVENT
+        )
+    else:
+        sub_message_type = args.subscribe_type
+
+    return (sub_subdomain, sub_service, sub_message_type)
+
+
+def parse_publish_args(args):
+    parts = []
+    if args.publish is None:
+        parts = [args.subdom, args.service]
+    else:
+        parts = args.publish.split(".")
+
+    if len(parts) == 1:
+        pub_subdomain = args.subdom
+        pub_service = parts[0]
+    elif len(parts) == 2:
+        pub_subdomain = parts[0]
+        pub_service = parts[1]
+    else:
+        raise ArgumentTypeError(
+            "Argument --publish should be in the format [SUBDOMAIN.]SERVICE"
+        )
+
+    pub_message_type = None
+    if args.publish_type is None:
+        pub_message_type = (
+            MESSAGE_TYPE_EVENT
+            if pub_subdomain == args.subdom and pub_service == args.service
+            else MESSAGE_TYPE_COMMAND
+        )
+    else:
+        pub_message_type = args.publish_type
+
+    return (pub_subdomain, pub_service, pub_message_type)
+
+
+# ------------------------------------------------------------------------------
+# ARGUMENT PARSER
+# ------------------------------------------------------------------------------
 
 
 def add_common_options(p):
+    p.add_argument("subdom", type=str, choices=SUBDOM_TYPES, help="subdomain")
+    p.add_argument("service", type=str, help="service")
     p.add_argument("env", help="application environment")
+    p.add_argument("--build-dir", default="build", help="build directory")
     p.add_argument(
         "--app-state",
         default=None,
         choices=APP_STATE_TYPES,
         help="target application environment state (leave None for test environments)",
     )
-    p.add_argument("--publish-topic", default=None, help="Pubsub topic published to")
+    p.add_argument(
+        "--subscribe",
+        default=None,
+        help="Subscribe to messages from [SUBDOMAIN.]SERVICE",
+    )
+    p.add_argument("--subscribe-type", default=None, help="Subscribe to message type")
+    p.add_argument(
+        "--publish", default=None, help="Publish messages to [SUBDOMAIN.]SERVICE"
+    )
+    p.add_argument("--publish-type", default=None, help="Publish message type")
 
 
-parser = ArgumentParser(description="Deploy domain functions and services")
+parser = ArgumentParser(description="Deploy domain services")
 subparser = parser.add_subparsers()
 
 function_parser = subparser.add_parser(
-    "functions", description="Deploy Google Cloud Function"
-)
-function_parser.add_argument("subdom", type=str, choices=SUBDOM_TYPES, help="subdomain")
-function_parser.add_argument("function", type=str, help="function")
-function_parser.add_argument(
-    "--trigger",
-    type=str,
-    default="pubsub",
-    choices=FUNCTION_TRIGGER_TYPES,
-    help="function trigger type",
+    "function", description="Deploy service as Google Cloud Function"
 )
 add_common_options(function_parser)
+function_parser.add_argument(
+    "--entry-point", type=str, default=None, help="function entry point"
+)
 function_parser.set_defaults(func=deploy_function)
 
-service_parser = subparser.add_parser(
-    "services", description="Deploy Google App Engine service"
+app_parser = subparser.add_parser(
+    "app", description="Deploy service as Google App Engine service"
 )
-function_parser.add_argument("subdom", type=str, choices=SUBDOM_TYPES, help="subdomain")
-function_parser.add_argument("service", type=str, help="service")
-add_common_options(service_parser)
-service_parser.set_defaults(func=deploy_service)
+add_common_options(app_parser)
+app_parser.set_defaults(func=deploy_app)
 
 
 if __name__ == "__main__":
     try:
         main(parser)
     except Exception as e:
-        # raise e
-        exit(e)
+        raise e
+        # exit(e)

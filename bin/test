@@ -3,11 +3,12 @@ set -e
 
 SUBDOM=${1}
 SERVICE=${2}
+BUILDDIR=${3-build}
 
 if [ -z "${SUBDOM}" ] || [ -z "${SERVICE}" ]; then
     echo "Error: missing parameter(s)." >&2
-    echo "    Usage: ${0} SUBDOMAIN SERVICE" >&2
-    echo "    Example: ${0} Article MyFunction"  >&2
+    echo "    Usage: ${0} SUBDOMAIN SERVICE [BUILDDIR]" >&2
+    echo "    Example: ${0} MySubdomain MyService"  >&2
     exit 1
 fi
 
@@ -23,9 +24,7 @@ if [ ! -f "${DOCKERFILE}" ]; then
     exit 1
 fi
 
-rm -fr "domain/${SUBDOM}/${SERVICE}/secrets"
-mkdir -p "domain/${SUBDOM}/${SERVICE}/secrets/test"
-cp -r secrets/test "domain/${SUBDOM}/${SERVICE}/secrets
+# bin/build "${SUBDOM}" "${SERVICE}" "${BUILDDIR}"
 
 DOCKERTAG=$( echo "${PROJ}/${SUBDOM}/${SERVICE}/test" | tr "[:upper:]" "[:lower:]" )
 
@@ -33,7 +32,7 @@ echo "Building test container..." >&2
 docker build -f "${DOCKERFILE}" \
     -t "${DOCKERTAG}" \
     --build-arg "service=${SERVICE}" \
-    "domain/${SUBDOM}"
+    "${BUILDDIR}"
 
 echo "Running tests..." >&2
 docker run "${DOCKERTAG}"
