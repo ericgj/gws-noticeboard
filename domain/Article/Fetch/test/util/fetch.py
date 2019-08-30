@@ -1,8 +1,6 @@
 from datetime import timedelta
 import hypothesis.strategies as hyp
 
-from shared.model.fetch.command import FetchArticle
-
 SAMPLE_URLS = [
     "https://www.theatlantic.com/magazine/archive/2019/04/adam-serwer-madison-grant-white-nationalism/583258/",
     "https://jlc.org/news/advocates-encouraged-governors-new-reform-effort",
@@ -17,10 +15,8 @@ SAMPLE_URLS = [
 ]
 
 
-def fetch_article_examples(urls=SAMPLE_URLS):
-    return hyp.builds(
-        FetchArticle, url=hyp.sampled_from(urls)
-    )
+def url_examples(urls=SAMPLE_URLS):
+    return hyp.sampled_from(urls)
 
 
 def article_data_examples(dates_near=None, dates_range=(7, 7)):

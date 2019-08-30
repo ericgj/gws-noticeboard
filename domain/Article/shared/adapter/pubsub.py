@@ -42,29 +42,40 @@ class DecodeFailure(Exception):
         )
 
 
-def gcf_adapter(decoder, encoding="utf-8"):
+def gcf_adapter(decoder, metadata_decoder=None, encoding="utf-8"):
     def _decoded_base64(fn):
         @wraps(fn)
         def __decoded_base64(msg, *args, **kwargs):
             s = b64decode(msg["data"]).decode(encoding)
-            # print(s)
             value = json.loads(s)
-            return decoded(decoder)(fn)(value, *args, **kwargs)
+            metadata = msg.get("attributes", {})
+            return decoded(decoder, metadata_decoder)(fn)(
+                value, metadata, *args, **kwargs
+            )
 
         return __decoded_base64
 
     return _decoded_base64
 
 
-def decoded(decoder):
+def decoded(decoder, metadata_decoder=None):
     def _decoded(fn):
         @wraps(fn)
-        def __decoded(value, *args, **kwargs):
+        def __decoded(value, metadata, *args, **kwargs):
             try:
                 decoded = decoder(value)
             except Exception as e:
                 raise DecodeFailure(_class_or_function_name(decoder), value, e)
-            return fn(decoded, *args, **kwargs)
+
+            try:
+                decoded_meta = (
+                    metadata if metadata_decoder is None else metadata_decoder(metadata)
+                )
+            except Exception as e:
+                raise DecodeFailure(
+                    _class_or_function_name(metadata_decoder), metadata, e
+                )
+            return fn(decoded, decoded_meta, *args, **kwargs)
 
         return __decoded
 

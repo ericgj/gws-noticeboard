@@ -1,23 +1,29 @@
 from shared.adapter.pubsub import gcf_adapter
-from shared.model.fetch import command
-from shared.model.core.command import SaveArticle, SaveFetchArticleError
+from shared.event.fetch import FetchedArticle, FailedFetchingArticle
+import shared.event.core as core_event
 from shared.model.article import Article
 
 import browser
 import env
 
 
-@gcf_adapter(command.from_json)
-def fetch(cmd: command.Command, ctx) -> str:
-    try:
-        article = fetch_article(cmd)
-    except Exception as e:
-        env.publish(SaveFetchArticleError(url=cmd.url, error=e).to_json())
-        raise e
-    env.publish(SaveArticle(url=cmd.url, article=article).to_json())
+@gcf_adapter(core_event.from_json)
+def fetch(event: core_event.Event, metadata: dict, ctx) -> str:
+    if isinstance(event, core_event.SavedNewLink):
+        try:
+            article = fetch_article(event.url)
+        except Exception as e:
+            env.publish(
+                FailedFetchingArticle(id=event.id, url=event.url, error=e).to_json()
+            )
+            raise e
+
+        env.publish(
+            FetchedArticle(id=event.id, url=event.url, article=article).to_json()
+        )
 
     return ""
 
 
-def fetch_article(cmd: command.Command) -> Article:
-    return browser.fetch(cmd)
+def fetch_article(url: str) -> Article:
+    return browser.fetch(url)

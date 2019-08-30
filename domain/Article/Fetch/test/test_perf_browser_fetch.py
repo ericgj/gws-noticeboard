@@ -3,7 +3,6 @@ from urllib.parse import urlparse
 import pytest
 
 import browser
-from shared.model.fetch.command import FetchArticle
 from test.util.fetch import SAMPLE_URLS
 
 
@@ -12,8 +11,7 @@ def test_fetch_config_compare():
     results = {url: [None, None] for url in SAMPLE_URLS}
     for url in SAMPLE_URLS:
         try:
-            req = FetchArticle(url=url, note=None)
-            art0 = browser.parse_np(browser.fetch_np(req.url), req.note)
+            art0 = browser.parse_np(browser.fetch_np(url))
             results[url][0] = art0.text
         except Exception as e:
             results[url][0] = e
@@ -21,9 +19,8 @@ def test_fetch_config_compare():
 
     for url in SAMPLE_URLS:
         try:
-            req = FetchArticle(url=url, note=None)
             art1 = browser.parse_np(
-                browser.fetch_np(req.url, config=browser.NP_GOOGLEBOT_CONFIG), req.note
+                browser.fetch_np(url, config=browser.NP_GOOGLEBOT_CONFIG)
             )
             results[url][1] = art1.text
         except Exception as e:

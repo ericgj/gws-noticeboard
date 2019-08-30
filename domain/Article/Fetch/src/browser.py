@@ -5,7 +5,6 @@ import lxml
 from html2text import html2text
 from markdown2 import markdown
 
-from shared.model.fetch.command import Command
 from shared.model.article import Article
 
 NP_GOOGLEBOT_CONFIG = {
@@ -15,13 +14,13 @@ NP_GOOGLEBOT_CONFIG = {
 }
 
 
-def fetch(cmd: Command) -> Article:
+def fetch(url: str) -> Article:
     """
     Note: a more sophisticated algorithm could examine the url and tweak 
     config based on it. The np_article could be evaluated to determine if 
     another scraping technique could work better.
     """
-    np_article = fetch_np(cmd.url)
+    np_article = fetch_np(url)
     article = parse_np(np_article)
     return article
 
