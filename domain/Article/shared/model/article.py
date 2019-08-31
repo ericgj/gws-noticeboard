@@ -9,6 +9,8 @@ import shared.util.date_ as date_
 class Article:
     title: str
     authors: List[str]
+    encoding: str
+    raw_html: str
     text: str
     html: str
     publish_date: Optional[date] = None
@@ -22,6 +24,8 @@ class Article:
             title=d["title"],
             authors=list(d["authors"]),
             summary=d.get("summary", None),
+            encoding=d["encoding"],
+            raw_html=d["raw_html"],
             text=d["text"],
             html=d["html"],
             publish_date=(
@@ -38,6 +42,8 @@ class Article:
             "title": self.title,
             "authors": self.authors,
             "summary": self.summary,
+            "encoding": self.encoding,
+            "raw_html": self.raw_html,
             "text": self.text,
             "html": self.html,
             "publish_date": (

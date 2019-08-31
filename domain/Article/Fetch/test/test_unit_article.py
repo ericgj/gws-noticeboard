@@ -14,3 +14,4 @@ def test_decode_encode(data):
     encoded = decoded.to_json()
     for (k, v) in data.items():
         assert encoded[k] == v
+    assert encoded["$type"] == "Article"

@@ -2,7 +2,7 @@ from hypothesis import given, settings
 
 # import pytest
 
-import browser
+from main import _fetch_article
 from test.util.fetch import url_examples
 
 
@@ -10,5 +10,5 @@ from test.util.fetch import url_examples
 @settings(deadline=None)
 # @pytest.mark.skip(reason="temporary")
 def test_fetch_runs_without_errors(url):
-    _ = browser.fetch(url)
+    _ = _fetch_article(url)
     assert True

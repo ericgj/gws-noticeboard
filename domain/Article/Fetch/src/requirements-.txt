@@ -1,5 +1,8 @@
 newspaper3k
 lxml
+html5lib
+beautifulsoup4
+cchardet
 html2text
 markdown2
 google-auth

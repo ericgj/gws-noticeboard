@@ -1,17 +1,16 @@
 #!/usr/bin/env sh
 set -e
 
-SUBDIR="${1}"
-NAME="${2-}"
+SUBDOM="${1}"
+SERVICE="${2}"
 
-if [ -z "${SUBDIR}" ]; then
+if [ -z "${SUBDOM}" ] || [ -z "${SERVICE}" ]; then
   echo "Error: missing parameter(s)." >&2
-  echo "    Usage: ${0} TYPE [NAME]"  >&2
-  echo "    Example: ${0} functions myfunction"  >&2
+  echo "    Usage: ${0} SUBDOMAIN SERVICE"  >&2
   exit 1
 fi
 
-ROOTDIR="${SUBDIR}/${NAME}"
+ROOTDIR="domain/${SUBDOM}/${SERVICE}"
 
 if [ ! -d ${ROOTDIR} ]; then
   echo "No such directory: ${ROOTDIR}" >&2
