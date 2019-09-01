@@ -2,11 +2,60 @@ import os
 from google.oauth2 import service_account
 
 from shared.util.env import assert_environ, load_json
-from shared.adapter import pubsub
+from shared.adapter import pubsub, logging
 
 
 # ------------------------------------------------------------------------------
-# Environment variables
+# Environment variables: Domain
+# ------------------------------------------------------------------------------
+
+
+@assert_environ(["APP_SUBDOMAIN"])
+def subdomain():
+    return os.environ["APP_SUBDOMAIN"]
+
+
+@assert_environ(["APP_SERVICE"])
+def service():
+    return os.environ["APP_SERVICE"]
+
+
+@assert_environ(["APP_ENV"])
+def environment():
+    return os.environ["APP_ENV"]
+
+
+def app_state():
+    return os.environ.get("APP_STATE", None)
+
+
+@assert_environ(["APP_PUBLISH_TOPIC"])
+def publish_topic():
+    return os.environ["APP_PUBLISH_TOPIC"]
+
+
+@assert_environ(["APP_SUBSCRIBE_TOPIC"])
+def subscribe_topic():
+    return os.environ["APP_SUBSCRIBE_TOPIC"]
+
+
+def logging_level():
+    return os.environ.get("APP_LOGGING_LEVEL", "INFO").upper()
+
+
+def remote_logging():
+    """
+    Note: turn this switch off to prevent undue Stackdriver logging in unit tests
+    """
+    return os.environ.get("APP_REMOTE_LOGGING", None) == "1"
+
+
+def local_logging():
+    return not remote_logging()
+
+
+# ------------------------------------------------------------------------------
+# Environment variables: Runtime
 # ------------------------------------------------------------------------------
 
 
@@ -25,17 +74,10 @@ def function_target():
 
 
 def service_account_file():
+    """
+    Note: this is not used, set GOOGLE_APPLICATION_CREDENTIALS instead
+    """
     return os.environ.get("APP_SERVICE_ACCOUNT", None)
-
-
-@assert_environ(["APP_ENV"])
-def environment():
-    return os.environ["APP_ENV"]
-
-
-@assert_environ(["APP_PUBLISH_TOPIC"])
-def publish_topic():
-    return os.environ["APP_PUBLISH_TOPIC"]
 
 
 # ------------------------------------------------------------------------------
@@ -72,3 +114,54 @@ def pubsub_client():
 
 def publish(msg):
     return pubsub.publish(pubsub_client(), project_id(), publish_topic(), msg)
+
+
+# ------------------------------------------------------------------------------
+# Logging
+# ------------------------------------------------------------------------------
+
+
+def logging_client():
+    return logging.client(service_account_credentials())
+
+
+def init_logging():
+    if local_logging():
+        logging.init_local_logging(logging_level())
+        return
+
+    try:
+        logging.init_logging(logging_client(), logging_level())
+        return
+
+    except Exception as e:
+        logging.init_local_logging(logging_level())
+        logger = logging.get_logger(__name__)
+        logger.warning(
+            "Note: unable to connect to Stackdriver logging, logging locally. "
+            "(Error: %s)" % (e,),
+            log_record(error=e),
+        )
+        return
+
+
+def get_logger(name):
+    return logging.get_logger(name)
+
+
+def log_record(**context) -> dict:
+    return logging.LogRecord(
+        subdomain=subdomain(),
+        service=service(),
+        environment=environment(),
+        app_state=app_state(),
+        publish_topic=publish_topic(),
+        subscribe_topic=subscribe_topic(),
+    ).with_context(context)
+
+
+def log_errors(logger):
+    """ 
+    Note: decorator for logging any unhandled errors
+    """
+    return logging.log_errors(logger, log_record)

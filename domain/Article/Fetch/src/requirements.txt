@@ -8,6 +8,8 @@ feedfinder2==0.0.4
 feedparser==5.2.1
 google-api-core==1.14.2
 google-auth==1.6.3
+google-cloud-core==1.0.3
+google-cloud-logging==1.12.1
 google-cloud-pubsub==1.0.0
 googleapis-common-protos==1.6.0
 grpc-google-iam-v1==0.12.3

@@ -4,6 +4,8 @@ import json
 
 from google.cloud import pubsub_v1
 
+SCOPES = ["https://www.googleapis.com/auth/pubsub"]
+
 
 def publisher_client(creds=None):
     return pubsub_v1.PublisherClient(credentials=creds)

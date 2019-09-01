@@ -3,6 +3,15 @@
 An automation and news curation tool for busy organizers 
 
 --------------------------------------------------------------------------------
+_1 Sep 2019_
+
+## Python logging, a dumpster fire
+
+Is it any wonder so many people have tried to "rewrite logging in anger"?
+I just spent the better portion of 2 1/2 days fighting it.
+
+
+--------------------------------------------------------------------------------
 _28 Aug 2019_
 
 ## A new proposal for DDD-style services, cleaned up

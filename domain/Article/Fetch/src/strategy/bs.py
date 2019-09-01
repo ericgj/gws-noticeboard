@@ -1,10 +1,10 @@
-import logging
 from bs4 import BeautifulSoup
 
 from shared.model.article import Article
+import env
 import strategy
 
-logger = logging.getLogger(__name__)
+logger = env.get_logger(__name__)
 
 
 class ParseError(Exception):
@@ -20,10 +20,18 @@ class ParseError(Exception):
             str(self.error),
         )
 
+    def to_json(self):
+        return {
+            "$type": self.__class__.__name__,
+            "parser": self.parser.__name__,
+            "css": self.parser.css,
+            "error": str(self.error),
+        }
+
 
 class BodyParser(strategy.BodyParser):
     def __init__(self, options: dict = {}):
-        self.html_parsers = options.get("html_parsers", ["html.parser"])
+        self.html_parsers = options.get("html_parsers", ["lxml"])
         self.css_selectors = options.get("css_selectors", [])
         if len(self.html_parsers) == 0:
             raise ValueError("Expected one or more html_parsers to be specified")
@@ -42,9 +50,10 @@ class BodyParser(strategy.BodyParser):
                             continue
                         yield rs[0]
                     except Exception as e:
+                        perr = ParseError(parser=html_parser, css=css, error=e)
                         logger.warning(
-                            "Note parsing failed: %s"
-                            % (ParseError(parser=html_parser, css=css, error=e),)
+                            "Body parsing failed: %s" % (perr,),
+                            env.log_record(warning=perr.to_json()),
                         )
                         continue
 
