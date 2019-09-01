@@ -5,22 +5,13 @@ import logging
 import sys
 import traceback
 from typing import Optional
+from warnings import warn
 
 import google.cloud.logging
 
 SCOPES = ["https://www.googleapis.com/auth/logging.write"]
 
-FORMAT_STRING = json.dumps(
-    {
-        "message": "%(message)s",
-        "asctime": "%(asctime)s",
-        "filename": "%(filename)s",
-        "funcName": "%(funcName)s",
-        "module": "%(module)s",
-    }
-)
-
-FORMATTER_ARGS = [FORMAT_STRING, None, "%"]
+FORMATTER_ARGS = [None, None, "{"]
 
 
 def client(credentials=None):
@@ -73,31 +64,64 @@ class LogFormatter(logging.Formatter):
     """
 
     def format(self, record):
-        json_msg = super(LogFormatter, self).format(record)
-        try:
-            data_msg = json.loads(json_msg)
-        except Exception:
-            data_msg = {"message": str(json_msg)}
+        """ 
+        Note: the log formatting string and "format style" is ignored here.
+        We are not generating a log string but a dict. The message is formatted
+        always according to python 3.x string-formatting style. Also, the
+        pre-processing of message strings using %-style formatting against the
+        args is disabled.
 
+        The variables available in message strings are those in the final
+        dict, which include both logging record fields (prefixed with log_),
+        _and_ those passed in in the record.args.
+        """
+
+        # record.message = record.getMessage()
+        record.asctime = self.formatTime(record, self.datefmt)
+        # message = self.formatMessage(record)
+
+        record_data = {
+            "log_name": record.name,
+            "log_level": record.levelname,
+            "log_asctime": record.asctime,
+            "log_created": record.created,
+            "log_pathname": record.pathname,
+            "log_filename": record.filename,
+            "log_module": record.module,
+            "log_funcName": record.funcName,
+            "log_lineno": record.lineno,
+            "log_msg": str(record.msg),
+        }
+
+        """ OMG logging are you serious ? """
         if isinstance(record.args, dict):
             data = record.args.copy()
+        elif isinstance(record.args, tuple) and len(record.args) > 0:
+            if isinstance(record.args[0], dict):
+                data = record.args[0].copy()
+            else:
+                data = {"log_args": list(record.args)}
         else:
             data = {}
-        data.update(data_msg)
+
+        data.update(record_data)
+        data["message"] = record.message.format(**data)
         return data
 
 
 class LocalLogFormatter(LogFormatter):
     """
     If logging locally (not connected to Stackdriver), dump the structured record 
-    to a json string if possible, otherwise just the message field.
+    to a json string if possible, otherwise just the message field and drop
+    a console warning.
     """
 
     def format(self, record):
         data = super(LocalLogFormatter, self).format(record)
         try:
             return json.dumps(data)
-        except Exception:
+        except Exception as e:
+            warn("Error serializing log data, only logging message: %s" % (e,))
             return json.dumps({"message": str(data["message"])})
 
 

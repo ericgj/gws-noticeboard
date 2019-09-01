@@ -1,7 +1,7 @@
 import os
 from hypothesis import given, settings
 
-# import pytest
+import pytest
 
 # temporary
 os.environ["APP_SUBDOMAIN"] = "Article"
@@ -22,7 +22,7 @@ logger = env.get_logger(__name__)
 
 @given(url=url_examples())
 @settings(deadline=None)
-# @pytest.mark.skip(reason="temporary")
+@pytest.mark.skip(reason="temporary")
 def test_fetch_runs_without_errors(url):
     try:
         article = _fetch_article(url)

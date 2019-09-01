@@ -22,7 +22,9 @@ def fetch_one():
     root_logger = env.get_logger(None)
     assert root_logger.level > 0
     url = random.sample(SAMPLE_URLS, 1)[0]
-    logger.info("Testing url: %s" % (url,), env.log_record(foo="bar"))
+    logger.info(
+        "Testing url: {context[url]} in service {service}", env.log_record(url=url)
+    )
     try:
         article = _fetch_article(url)
         article.validate()
@@ -40,7 +42,12 @@ import json
 
 
 def test_fetch_one():
-    _run_in_subprocess("fetch_one", verify_has_at_least_n_logs(1))
+    _run_in_subprocess(
+        "fetch_one",
+        verify_has_at_least_n_logs(1),
+        verify_each_log_has_log_fields,
+        verify_each_log_message_is_resolved,
+    )
 
 
 def verify_has_at_least_n_logs(n):
@@ -51,6 +58,29 @@ def verify_has_at_least_n_logs(n):
         )
 
     return _verify
+
+
+def verify_each_log_has_log_fields(logs, _):
+    for log in logs:
+        keys = log.keys()
+        assert "log_name" in keys, 'Missing "log_name"'
+        assert "log_level" in keys, 'Missing "log_level"'
+        assert "log_asctime" in keys, 'Missing "log_asctime"'
+        assert "log_created" in keys, 'Missing "log_created"'
+        assert "log_pathname" in keys, 'Missing "log_pathname"'
+        assert "log_module" in keys, 'Missing "log_module"'
+        assert "log_funcName" in keys, 'Missing "log_funcName"'
+        assert "log_lineno" in keys, 'Missing "log_lineno"'
+        assert "log_msg" in keys, 'Missing "log_msg"'
+        assert "message" in keys, 'Missing "message"'
+        assert "context" in keys, 'Missing "context"'
+
+
+def verify_each_log_message_is_resolved(logs, _):
+    for log in logs:
+        assert not "{" in log["message"], "Apparenly unresolved message: %s" % (
+            log["message"],
+        )
 
 
 def _run_in_subprocess(test_name, *verifiers):
