@@ -1,0 +1,66 @@
+#!/usr/bin/env sh
+set -e
+
+ACCT="$(cat secrets/billing-account)"
+if [ -z "${ACCT}" ]; then 
+    echo "Please set your billing account number first in secrets/billing-account" >&2
+    exit 1
+fi
+
+PROJ=$(cat secrets/project)
+
+if [ -z "${PROJ}" ]; then
+    echo "Project not found. Check secrets/project file." >&2
+    exit 1
+fi
+
+
+echo "Creating GCP project..." >&2
+gcloud projects create "${PROJ}" --name "${PROJ}"
+
+echo "Enabling billing..." >&2
+gcloud beta billing projects link ${PROJ} \
+    --billing-account "${ACCT}"
+
+echo "Enabling services..." >&2
+gcloud services enable --project ${PROJ} \
+    cloudbuild.googleapis.com \
+    cloudfunctions.googleapis.com \
+    cloudkms.googleapis.com \
+    cloudscheduler.googleapis.com \
+    containerregistry.googleapis.com \
+    datastore.googleapis.com \
+    logging.googleapis.com \
+    pubsub.googleapis.com
+
+echo "Creating keyring..." >&2
+gcloud kms keyrings create project --project "${PROJ}" --location global
+gcloud kms keyrings create test --project "${PROJ}" --location global
+
+echo "Creating keys..." >&2
+gcloud kms keys create default --project "${PROJ}" --location global \
+    --keyring project --purpose encryption
+gcloud kms keys create default --project "${PROJ}" --location global \
+    --keyring test --purpose encryption
+gcloud kms keys create service-accounts --project "${PROJ}" --location global \
+    --keyring test --purpose encryption
+
+echo "Saving service account key for testing..." >&2
+mkdir -p "secrets/test/service-accounts"
+gcloud iam service-accounts keys create "secrets/test/service-accounts/project.json" \
+    --iam-account "${PROJ}@appspot.gserviceaccount.com" \
+    --project "${PROJ}"
+
+echo "Encrypting service account key for testing..." >&2
+mkdir -p "secrets.enc/test/service-accounts"
+gcloud kms encrypt \
+    --plaintext-file secrets/test/service-accounts/project.json \
+    --ciphertext-file secrets.enc/test/service-accounts/project.json.enc \
+    --location global \
+    --keyring test \
+    --key service-accounts \
+    --project "${PROJ}"
+
+
+echo "Done." >&2
+
