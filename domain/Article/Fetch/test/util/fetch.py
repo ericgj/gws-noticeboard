@@ -1,18 +1,29 @@
 from datetime import timedelta
 import hypothesis.strategies as hyp
 
-SAMPLE_URLS = [
-    "https://www.theatlantic.com/magazine/archive/2019/04/adam-serwer-madison-grant-white-nationalism/583258/",
-    "https://jlc.org/news/advocates-encouraged-governors-new-reform-effort",
+
+UNBLOCKED_URLS = [
     "https://lawatthemargins.com/selfcareforactivists-08072019",
-    "https://foodfirst.org/publication/the-people-went-walking-how-rufino-dominguez-revolutionized-the-way-we-think-about-migration-part-i/",
     "https://www.greatfallstribune.com/story/news/local/2015/04/16/grandparents-protest-child-protective-services/25904331",
     "https://theintercept.com/2019/08/07/el-paso-border-war-terror/",
     "https://www.washingtonpost.com/lifestyle/2019/08/09/caught-between-young-kids-parent-with-alzheimers-i-found-lifeline-playground/",
     "https://www.nytimes.com/2019/08/20/us/california-police-use-of-force-law.html",
-    "https://www.bloomberg.com/news/articles/2019-08-19/oil-companies-persuade-states-to-make-pipeline-protests-a-felony",
     "https://medium.com/brepairers/10-statistics-worse-than-the-trade-deficit-3a0352d3090d",
 ]
+
+WARNING_URLS = [
+    "https://www.theatlantic.com/magazine/archive/2019/04/adam-serwer-madison-grant-white-nationalism/583258/",
+    "https://foodfirst.org/publication/the-people-went-walking-how-rufino-dominguez-revolutionized-the-way-we-think-about-migration-part-i/",
+    "https://jlc.org/news/advocates-encouraged-governors-new-reform-effort",
+    "https://www.bloomberg.com/news/articles/2019-08-19/oil-companies-persuade-states-to-make-pipeline-protests-a-felony",
+    "https://www.wsj.com/articles/hong-kong-students-go-back-to-school-but-protests-wont-cool-11567392576",
+]
+
+BLOCKED_URLS = []
+
+UNKNOWN_URLS = ["http://madeupname0.com/not/a/real/url.html"]
+
+SAMPLE_URLS = UNBLOCKED_URLS + WARNING_URLS + BLOCKED_URLS
 
 
 def url_examples(urls=SAMPLE_URLS):

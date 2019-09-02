@@ -19,6 +19,9 @@ def _fetch(event: core_event.Event, metadata: dict, ctx) -> str:
         try:
             article = _fetch_article(event.url)
             article.validate()
+            env.publish(
+                FetchedArticle(id=event.id, url=event.url, article=article).to_json()
+            )
 
         except ArticleIssues as w:
             logger.warning(w, env.log_record(error=w.to_json()))
@@ -33,10 +36,6 @@ def _fetch(event: core_event.Event, metadata: dict, ctx) -> str:
                 FailedFetchingArticle(id=event.id, url=event.url, error=e).to_json()
             )
             raise e from None
-
-        env.publish(
-            FetchedArticle(id=event.id, url=event.url, article=article).to_json()
-        )
 
     return ""
 

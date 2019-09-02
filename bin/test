@@ -26,6 +26,6 @@ docker build -f "${DOCKERFILE}" \
     "${BUILDDIR}"
 
 echo "Running tests..." >&2
-docker run "${DOCKERTAG}" "$@"
+docker run --env-file build/.env "${DOCKERTAG}" "$@"
 
 echo "Done." >&2

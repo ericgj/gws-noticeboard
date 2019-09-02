@@ -143,7 +143,10 @@ in the {APP_ENV} environment. Is this correct? Here is the full environment:
     stderr("")
     resp = None
     while (resp is None) or (resp.upper() not in ["Y", "YES", "N", "NO", ""]):
-        resp = input("(yes/No)? ")
+        try:
+            resp = input("(yes/No)? ")
+        except SyntaxError:    # to work around python2 empty input error
+            resp = ""
     return resp.upper() in ["Y", "YES"]
 
 

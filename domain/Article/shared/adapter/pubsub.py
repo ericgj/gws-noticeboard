@@ -1,6 +1,8 @@
-from base64 import b64decode
+from base64 import b64decode, b64encode
+from datetime import datetime
 from functools import wraps
 import json
+from uuid import uuid4
 
 from google.cloud import pubsub_v1
 
@@ -82,6 +84,32 @@ def decoded(decoder, metadata_decoder=None):
         return __decoded
 
     return _decoded
+
+
+def gcf_encoding(data, attributes, encoding="utf8", publish_time=None):
+    """ 
+    Note: useful for testing. 
+    Given json-encodeable data and attributes, 
+    Returns event with encoded payload, and context, as passed into Python
+    GCF functions. 
+    """
+    payload = b64encode(json.dumps(data).encode(encoding))
+    publish_time = datetime.utcnow() if publish_time is None else publish_time
+    id = str(uuid4())
+    return (
+        {
+            "data": payload,
+            "attributes": attributes,
+            "messageId": id,
+            "publishTime": publish_time.strftime("%Y-%m-%dT%H:%M:%S.%LZ"),
+        },
+        {
+            "event_id": id,
+            "event_type": "google.pubsub.topic.publish",
+            "resource": "unknown",
+            "timestamp": publish_time.strftime("%Y-%m-%dT%H:%M:%S.%LZ"),
+        },
+    )
 
 
 def _class_or_function_name(fn):
