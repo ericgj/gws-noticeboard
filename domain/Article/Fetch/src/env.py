@@ -47,7 +47,7 @@ def remote_logging():
     """
     Note: turn this switch off to prevent undue Stackdriver logging in unit tests
     """
-    return os.environ.get("APP_REMOTE_LOGGING", None) == "1"
+    return os.environ.get("APP_LOGGING_REMOTE", None) == "1"
 
 
 def local_logging():

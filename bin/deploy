@@ -3,11 +3,15 @@
 # Note: python2.7 compatible for gcloud builder
 
 from __future__ import print_function
-from argparse import ArgumentParser, ArgumentTypeError
+from argparse import ArgumentParser
 import os
 import os.path
 import subprocess
 import sys
+
+from ruamel.yaml import YAML
+
+yaml = YAML(typ="safe")
 
 
 def stderr(s):
@@ -30,15 +34,7 @@ def mkdir_p(d):
     os.makedirs(d)
 
 
-APP_STATE_TYPES = (None, "blue", "green")
-
-SUBDOM_TYPES = [
-    f for f in os.listdir("domain") if os.path.isdir(os.path.join("domain", f))
-]
-
 FUNCTION_TRIGGER_TYPES = ["pubsub", "http", "bucket"]
-MESSAGE_TYPE_COMMAND = "command"
-MESSAGE_TYPE_EVENT = "event"
 
 
 # ------------------------------------------------------------------------------
@@ -52,40 +48,31 @@ def main(parser, argv=sys.argv[1:]):
     args.func(args, get_project())
 
 
-"""
-def run_build(args):
-    subprocess.check_call(["bin/build", args.subdom, args.service, args.env, args.build_dir])
-"""
-
-
 def deploy_function(args, project):
-    sub_subdomain, sub_service, sub_message_type = parse_subscribe_args(args)
-    pub_subdomain, pub_service, pub_message_type = parse_publish_args(args)
+    env = load_function_env(args)
+    assert_env(env)
 
-    entry_point = args.service.lower() if args.entry_point is None else args.entry_point
+    if args.prompt:
+        if not prompt_env(env):
+            exit("Cancelled.")
+
+    subdom = env["APP_SUBDOMAIN"]
+    service = env["APP_SERVICE"]
+    environment = env["APP_ENV"]
+    app_state = env["APP_STATE"]
+    sub_name = env["APP_SUBSCRIBE_TOPIC"]
+    pub_name = env["APP_PUBLISH_TOPIC"]
+
+    entry_point = service.lower() if args.entry_point is None else args.entry_point
 
     func_name = gcf_function_name(
-        subdomain=args.subdom,
-        service=args.service,
+        subdomain=subdom,
+        service=service,
         entry_point=entry_point,
-        env=args.env,
-        app_state=args.app_state,
+        env=environment,
+        app_state=None if app_state is None or len(app_state) == 0 else app_state,
     )
-    sub_name = gcf_pubsub_topic_name(
-        subdomain=sub_subdomain,
-        service=sub_service,
-        message_type=sub_message_type,
-        env=args.env,
-        app_state=args.app_state,
-    )
-    pub_name = gcf_pubsub_topic_name(
-        subdomain=pub_subdomain,
-        service=pub_service,
-        message_type=pub_message_type,
-        env=args.env,
-        app_state=args.app_state,
-    )
-    service_account_name = service_account_for(args.subdom, project)
+    service_account_name = service_account_for(subdom, project)
 
     entry_point_opts = ["--entry-point", entry_point]
 
@@ -93,10 +80,9 @@ def deploy_function(args, project):
 
     trigger_opts = ["--trigger-topic", sub_name]
 
-    env_vars = [("APP_ENV", args.env), ("APP_PUBLISH_TOPIC", pub_name)]
     set_env_opts = [
         "--set-env-vars",
-        ",".join(["%s=%s" % (k, v) for (k, v) in env_vars]),
+        ",".join(["%s=%s" % (k, v) for (k, v) in env.items()]),
     ]
 
     service_account_opts = ["--service-account", service_account_name]
@@ -126,14 +112,43 @@ def deploy_function(args, project):
     stderr("Done.")
 
 
+def load_function_env(args):
+    envyaml = os.path.join(args.build_dir, "env.yaml")
+    env = None
+    with open(envyaml) as f:
+        env = yaml.load(f)
+    return env
+
+
+def assert_env(env):
+    assert isinstance(env, dict), "Environment variable file empty or wrong format"
+    assert "APP_SUBDOMAIN" in env, "Missing variable 'APP_SUBDOMAIN'"
+    assert "APP_SERVICE" in env, "Missing variable 'APP_SERVICE'"
+    assert "APP_ENV" in env, "Missing variable 'APP_ENV'"
+    assert "APP_STATE" in env, "Missing variable 'APP_STATE'"
+    assert "APP_SUBSCRIBE_TOPIC" in env, "Missing variable 'APP_SUBSCRIBE_TOPIC'"
+    assert "APP_PUBLISH_TOPIC" in env, "Missing variable 'APP_PUBLISH_TOPIC'"
+
+
+def prompt_env(env):
+    stderr(
+        """
+You appear to be trying to deploy service {APP_SERVICE} in subdomain {APP_SUBDOMAIN},
+in the {APP_ENV} environment. Is this correct? Here is the full environment:
+
+""".format(**env)
+    )
+    for (k, v) in env.items():
+        stderr("%-22s = %s" % (k, v))
+    stderr("")
+    resp = None
+    while (resp is None) or (resp.upper() not in ["Y", "YES", "N", "NO", ""]):
+        resp = input("(yes/No)? ")
+    return resp.upper() in ["Y", "YES"]
+
+
 def gcf_function_name(*, subdomain, service, entry_point, env, app_state=None):
     name = "_".join([part.lower() for part in (subdomain, service, entry_point)])
-    mod = "--".join([part.lower() for part in (env, app_state) if part is not None])
-    return "--".join([name, mod])
-
-
-def gcf_pubsub_topic_name(*, subdomain, service, message_type, env, app_state=None):
-    name = ".".join([part.lower() for part in (subdomain, service, message_type)])
     mod = "--".join([part.lower() for part in (env, app_state) if part is not None])
     return "--".join([name, mod])
 
@@ -181,94 +196,21 @@ def authorize_service_account_to_publish_to(topic, email, project):
     )
 
 
-def parse_subscribe_args(args):
-    parts = []
-    if args.subscribe is None:
-        parts = [args.subdom, args.service]
-    else:
-        parts = args.subscribe.split(".")
-
-    if len(parts) == 1:
-        sub_subdomain = args.subdom
-        sub_service = parts[0]
-    elif len(parts) == 2:
-        sub_subdomain = parts[0]
-        sub_service = parts[1]
-    else:
-        raise ArgumentTypeError(
-            "Argument --subscribe should be in the format [SUBDOMAIN.]SERVICE"
-        )
-
-    sub_message_type = None
-    if args.subscribe_type is None:
-        sub_message_type = (
-            MESSAGE_TYPE_COMMAND
-            if sub_subdomain == args.subdom and sub_service == args.service
-            else MESSAGE_TYPE_EVENT
-        )
-    else:
-        sub_message_type = args.subscribe_type
-
-    return (sub_subdomain, sub_service, sub_message_type)
-
-
-def parse_publish_args(args):
-    parts = []
-    if args.publish is None:
-        parts = [args.subdom, args.service]
-    else:
-        parts = args.publish.split(".")
-
-    if len(parts) == 1:
-        pub_subdomain = args.subdom
-        pub_service = parts[0]
-    elif len(parts) == 2:
-        pub_subdomain = parts[0]
-        pub_service = parts[1]
-    else:
-        raise ArgumentTypeError(
-            "Argument --publish should be in the format [SUBDOMAIN.]SERVICE"
-        )
-
-    pub_message_type = None
-    if args.publish_type is None:
-        pub_message_type = (
-            MESSAGE_TYPE_EVENT
-            if pub_subdomain == args.subdom and pub_service == args.service
-            else MESSAGE_TYPE_COMMAND
-        )
-    else:
-        pub_message_type = args.publish_type
-
-    return (pub_subdomain, pub_service, pub_message_type)
-
-
 # ------------------------------------------------------------------------------
 # ARGUMENT PARSER
 # ------------------------------------------------------------------------------
 
 
 def add_common_options(p):
-    p.add_argument("subdom", type=str, choices=SUBDOM_TYPES, help="subdomain")
-    p.add_argument("service", type=str, help="service")
-    p.add_argument("env", help="application environment")
+    p.add_argument("--prompt", action="store_true", help="prompt before deploy")
+    p.add_argument(
+        "--no-prompt",
+        action="store_false",
+        dest="prompt",
+        help="do not prompt before deploy",
+    )
     p.add_argument("--build-dir", default="build", help="build directory")
-    p.add_argument(
-        "--app-state",
-        default=None,
-        choices=APP_STATE_TYPES,
-        help="target application environment state (leave None for test environments)",
-    )
-    p.add_argument(
-        "--subscribe",
-        default=None,
-        help="Subscribe to messages from [SUBDOMAIN.]SERVICE",
-    )
-    p.add_argument("--subscribe-type", default=None, help="Subscribe to message type")
-    p.add_argument(
-        "--publish", default=None, help="Publish messages to [SUBDOMAIN.]SERVICE"
-    )
-    p.add_argument("--publish-type", default=None, help="Publish message type")
+    p.set_defaults(prompt=True)
 
 
 parser = ArgumentParser(description="Deploy domain services")

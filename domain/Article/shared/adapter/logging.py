@@ -90,7 +90,6 @@ class LogFormatter(logging.Formatter):
             "log_module": record.module,
             "log_funcName": record.funcName,
             "log_lineno": record.lineno,
-            "log_msg": str(record.msg),
         }
 
         """ OMG logging are you serious ? """

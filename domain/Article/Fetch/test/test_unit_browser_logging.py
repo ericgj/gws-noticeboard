@@ -1,14 +1,6 @@
 import os
 import random
 
-# temporary
-os.environ["APP_SUBDOMAIN"] = "Article"
-os.environ["APP_SERVICE"] = "Fetch"
-os.environ["APP_ENV"] = "test"
-os.environ["APP_STATE"] = ""
-os.environ["APP_PUBLISH_TOPIC"] = "article.fetch.events--test"
-os.environ["APP_SUBSCRIBE_TOPIC"] = "article.core.events--test"
-
 from shared.model.article import ArticleIssues
 from main import _fetch_article
 import env
@@ -21,6 +13,9 @@ logger = env.get_logger(__name__)
 def fetch_one():
     root_logger = env.get_logger(None)
     assert root_logger.level > 0
+    
+    assert os.environ.get("APP_SUBDOMAIN") is not None
+
     url = random.sample(SAMPLE_URLS, 1)[0]
     logger.info(
         "Testing url: {context[url]} in service {service}", env.log_record(url=url)
@@ -71,7 +66,6 @@ def verify_each_log_has_log_fields(logs, _):
         assert "log_module" in keys, 'Missing "log_module"'
         assert "log_funcName" in keys, 'Missing "log_funcName"'
         assert "log_lineno" in keys, 'Missing "log_lineno"'
-        assert "log_msg" in keys, 'Missing "log_msg"'
         assert "message" in keys, 'Missing "message"'
         assert "context" in keys, 'Missing "context"'
 

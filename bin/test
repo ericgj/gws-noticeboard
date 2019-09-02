@@ -1,15 +1,9 @@
 #!/usr/bin/env sh
 set -e
 
-SUBDOM=${1}
-SERVICE=${2}
-BUILDDIR=${3-build}
-
-if [ -z "${SUBDOM}" ] || [ -z "${SERVICE}" ]; then
-    echo "Error: missing parameter(s)." >&2
-    echo "    Usage: ${0} SUBDOMAIN SERVICE [BUILDDIR]" >&2
-    echo "    Example: ${0} MySubdomain MyService"  >&2
-    exit 1
+BUILDDIR=${1-build} 
+if [ "$#" -gt 0 ]; then 
+    shift
 fi
 
 PROJ=$(cat secrets/project)
@@ -24,17 +18,14 @@ if [ ! -f "${DOCKERFILE}" ]; then
     exit 1
 fi
 
-# bin/build "${SUBDOM}" "${SERVICE}" "${BUILDDIR}"
-
-DOCKERTAG=$( echo "${PROJ}/${SUBDOM}/${SERVICE}/test" | tr "[:upper:]" "[:lower:]" )
+DOCKERTAG="${PROJ}/test"
 
 echo "Building test container..." >&2
 docker build -f "${DOCKERFILE}" \
     -t "${DOCKERTAG}" \
-    --build-arg "service=${SERVICE}" \
     "${BUILDDIR}"
 
 echo "Running tests..." >&2
-docker run "${DOCKERTAG}"
+docker run "${DOCKERTAG}" "$@"
 
 echo "Done." >&2

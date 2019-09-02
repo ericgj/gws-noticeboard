@@ -1,32 +1,293 @@
-#!/usr/bin/env sh
-set -e
+#!/usr/bin/env python
 
-SUBDOM=${1}
-SERVICE=${2}
-ENV=${3-test}
-BUILDDIR=${4-build}
+# Note: python2.7 compatible for gcloud builder
 
-if [ -z "${SUBDOM}" ] || [ -z "${SERVICE}" ]; then
-    echo "Usage: ${0} SUBDOMAIN SERVICE [ENV] [BUILDDIR]" >&2
-    exit 1
-fi
+from __future__ import print_function
+from argparse import ArgumentParser, ArgumentTypeError
+import os
+import os.path
+import shutil
+import sys
 
-echo "Copying source..." >&2 
-rm -fr "${BUILDDIR}"   
-mkdir -p "${BUILDDIR}"  
-cp -r domain/${SUBDOM}/${SERVICE}/* "${BUILDDIR}/"  
+from ruamel.yaml import YAML
 
-echo "Copying shared source..." >&2  
-mkdir -p "${BUILDDIR}/src"  
-cp -r "domain/${SUBDOM}/shared" "${BUILDDIR}/src/"  
+yaml = YAML(typ="safe")
+yaml.default_flow_style = False
 
-echo "Copying domain shared source..." >&2  
-mkdir -p "${BUILDDIR}/src/domain"  
-cp -r "domain/shared" "${BUILDDIR}/src/domain/"  
+def stderr(s):
+    print(s, file=sys.stderr)
 
-echo "Copying secrets..." >&2  
-mkdir -p "${BUILDDIR}/secrets"  
-cp -r "secrets/${ENV}" "${BUILDDIR}/secrets/" 
 
-echo "Done." >&2
+def get_project():
+    try:
+        proj = open("secrets/project").read().strip()
+        if len(proj) == 0:
+            exit("Project not found. Is your secrets/project file empty?")
+        return proj
+    except OSError:
+        exit("Project not found. Check secrets/project file.")
 
+
+def mkdir_p(d):
+    if os.path.exists(d) and os.path.isdir(d):
+        return
+    os.makedirs(d)
+
+
+def rm_rf(d):
+    try:
+        shutil.rmtree(d)
+    except FileNotFoundError:
+        pass
+
+
+def cp_files_within(src, dest):
+    for basename in os.listdir(src):
+        srcfile = os.path.join(src, basename)
+        destfile = os.path.join(dest, basename)
+        if os.path.isfile(srcfile):
+            shutil.copy2(srcfile, destfile)
+        elif os.path.isdir(srcfile):
+            shutil.copytree(srcfile, destfile)
+
+
+def cp_dir_within(src, dest):
+    shutil.copytree(src, os.path.join(dest, os.path.basename(src)))
+
+
+APP_STATE_TYPES = (None, "blue", "green")
+
+SUBDOM_TYPES = [
+    f for f in os.listdir("domain") 
+        if os.path.isdir(os.path.join("domain", f)) and not f == "shared"
+]
+
+LOG_LEVEL_TYPES = ["DEBUG", "INFO", "WARNING", "ERROR", "FATAL", "CRITICAL"]
+
+MESSAGE_TYPE_COMMAND = "command"
+MESSAGE_TYPE_EVENT = "event"
+
+# ------------------------------------------------------------------------------
+# MAIN
+# ------------------------------------------------------------------------------
+
+
+def main(parser, argv=sys.argv[1:]):
+    args = parser.parse_args(argv)
+    copy_files(args)
+    env = get_env(args, get_project())
+    copy_env(args, env)
+    stderr("Done.")
+
+
+def get_env(args, project):
+    sub_subdomain, sub_service, sub_message_type = parse_subscribe_args(args)
+    pub_subdomain, pub_service, pub_message_type = parse_publish_args(args)
+
+    sub_name = pubsub_app_topic_name(
+        subdomain=sub_subdomain,
+        service=sub_service,
+        message_type=sub_message_type,
+        env=args.env,
+        app_state=args.app_state,
+    )
+    pub_name = pubsub_app_topic_name(
+        subdomain=pub_subdomain,
+        service=pub_service,
+        message_type=pub_message_type,
+        env=args.env,
+        app_state=args.app_state,
+    )
+
+    return {
+        "APP_SUBDOMAIN": args.subdom,
+        "APP_SERVICE": args.service,
+        "APP_ENV": args.env,
+        "APP_STATE": "" if args.app_state is None else args.app_state,
+        "APP_SUBSCRIBE_TOPIC": sub_name,
+        "APP_PUBLISH_TOPIC": pub_name,
+        "APP_LOGGING_LEVEL": args.log_level,
+        "APP_LOGGING_REMOTE": "1" if args.log_remote is True else "0",
+    }
+
+
+def copy_files(args):
+    domain_source = "domain"
+    subdom_source = os.path.join(domain_source, args.subdom)
+    service_source = os.path.join(subdom_source, args.service)
+    shared_source = os.path.join(subdom_source, "shared")
+    domain_shared_source = os.path.join(domain_source, "shared")
+    secrets_source = os.path.join("secrets", args.env)
+
+    src_dest = os.path.join(args.build_dir, "src")
+    domain_dest = os.path.join(src_dest, "domain")
+    secrets_dest = os.path.join(args.build_dir, "secrets")
+
+    stderr("Copying source...")
+    rm_rf(args.build_dir)
+    mkdir_p(args.build_dir)
+    cp_files_within(service_source, args.build_dir)
+
+    stderr("Copying shared source...")
+    mkdir_p(src_dest)
+    cp_dir_within(shared_source, src_dest)
+
+    stderr("Copying domain shared source...")
+    mkdir_p(domain_dest)
+    cp_dir_within(domain_shared_source, domain_dest)
+
+    stderr("Copying secrets...")
+    mkdir_p(secrets_dest)
+    cp_dir_within(secrets_source, secrets_dest)
+
+
+def copy_env(args, env):
+    mkdir_p(args.build_dir)
+
+    stderr("Creating env.yaml...")
+    set_env_yaml_env(os.path.join(args.build_dir, "env.yaml"), env)
+
+    stderr("Creating .env...")
+    set_dotenv_env(os.path.join(args.build_dir, ".env"), env)
+
+    appyaml = os.path.join(args.build_dir, "app.yaml")
+    if os.path.isfile(appyaml):
+        stderr("Updating app.yaml...")
+        set_app_yaml_env(appyaml, env)
+
+
+def parse_subscribe_args(args):
+    parts = []
+    if args.subscribe is None:
+        parts = [args.subdom, args.service]
+    else:
+        parts = args.subscribe.split(".")
+
+    if len(parts) == 1:
+        sub_subdomain = args.subdom
+        sub_service = parts[0]
+    elif len(parts) == 2:
+        sub_subdomain = parts[0]
+        sub_service = parts[1]
+    else:
+        raise ArgumentTypeError(
+            "Argument --subscribe should be in the format [SUBDOMAIN.]SERVICE"
+        )
+
+    sub_message_type = None
+    if args.subscribe_type is None:
+        sub_message_type = (
+            MESSAGE_TYPE_COMMAND
+            if sub_subdomain == args.subdom and sub_service == args.service
+            else MESSAGE_TYPE_EVENT
+        )
+    else:
+        sub_message_type = args.subscribe_type
+
+    return (sub_subdomain, sub_service, sub_message_type)
+
+
+def parse_publish_args(args):
+    parts = []
+    if args.publish is None:
+        parts = [args.subdom, args.service]
+    else:
+        parts = args.publish.split(".")
+
+    if len(parts) == 1:
+        pub_subdomain = args.subdom
+        pub_service = parts[0]
+    elif len(parts) == 2:
+        pub_subdomain = parts[0]
+        pub_service = parts[1]
+    else:
+        raise ArgumentTypeError(
+            "Argument --publish should be in the format [SUBDOMAIN.]SERVICE"
+        )
+
+    pub_message_type = None
+    if args.publish_type is None:
+        pub_message_type = (
+            MESSAGE_TYPE_EVENT
+            if pub_subdomain == args.subdom and pub_service == args.service
+            else MESSAGE_TYPE_COMMAND
+        )
+    else:
+        pub_message_type = args.publish_type
+
+    return (pub_subdomain, pub_service, pub_message_type)
+
+
+def pubsub_app_topic_name(*, subdomain, service, message_type, env, app_state=None):
+    name = ".".join([part.lower() for part in (subdomain, service, message_type)])
+    mod = "--".join([part.lower() for part in (env, app_state) if part is not None])
+    return "--".join([name, mod])
+
+
+def set_env_yaml_env(envyaml, env):
+    with open(envyaml, "w") as f:
+        yaml.dump(env, f)
+
+
+def set_dotenv_env(dotenv, env):
+    with open(dotenv, "w") as f:
+        for (k, v) in env.items():
+            print("%s=%s" % (k, v), file=f)
+
+
+def set_app_yaml_env(appyaml, env):
+    appyaml_data = None
+    ischanged = False
+    with open(appyaml) as f:
+        appyaml_data = yaml.load(f)
+        if isinstance(appyaml_data, dict):
+            appyaml_data["env_variables"] = env
+            ischanged = True
+    if ischanged:
+        with open(appyaml, "w") as f:
+            yaml.dump(appyaml_data, f)
+
+
+# ------------------------------------------------------------------------------
+# ARGUMENT PARSER
+# ------------------------------------------------------------------------------
+
+parser = ArgumentParser(description="Build service")
+parser.add_argument("subdom", type=str, choices=SUBDOM_TYPES, help="subdomain")
+parser.add_argument("service", type=str, help="service")
+parser.add_argument("env", help="application environment")
+parser.add_argument("--build-dir", default="build", help="build directory")
+parser.add_argument(
+    "--app-state",
+    default=None,
+    choices=APP_STATE_TYPES,
+    help="target application environment state (leave None for test environments)",
+)
+parser.add_argument(
+    "--subscribe", default=None, help="Subscribe to messages from [SUBDOMAIN.]SERVICE"
+)
+parser.add_argument("--subscribe-type", default=None, help="Subscribe to message type")
+parser.add_argument(
+    "--publish", default=None, help="Publish messages to [SUBDOMAIN.]SERVICE"
+)
+parser.add_argument("--publish-type", default=None, help="Publish message type")
+parser.add_argument(
+    "--log-level", default="INFO", choices=LOG_LEVEL_TYPES, help="logging level"
+)
+parser.add_argument(
+    "--log-remote", action="store_true", help="use remote (Stackdriver) logging"
+)
+parser.add_argument(
+    "--no-log-remote",
+    action="store_false",
+    dest="log_remote",
+    help="local (stderr) logging only",
+)
+
+
+if __name__ == "__main__":
+    try:
+        main(parser)
+    except Exception as e:
+        raise e
+        # exit(e)
