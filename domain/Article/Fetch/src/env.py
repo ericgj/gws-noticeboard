@@ -160,8 +160,8 @@ def log_record(**context) -> dict:
     ).with_context(context)
 
 
-def log_errors(logger):
+def log_errors(logger, *args, **kwargs):
     """ 
     Note: decorator for logging any unhandled errors
     """
-    return logging.log_errors(logger, log_record)
+    return logging.log_errors(logger, log_record, *args, **kwargs)

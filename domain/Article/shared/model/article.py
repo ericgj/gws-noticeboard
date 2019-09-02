@@ -38,7 +38,7 @@ class Article:
             ),
         )
 
-    def to_json(self, brief=False) -> dict:
+    def to_json(self, full=False) -> dict:
         return {
             "$type": self.__class__.__name__,
             "site_name": self.site_name,
@@ -46,13 +46,13 @@ class Article:
             "authors": self.authors,
             "summary": (
                 ellipsis(self.summary)
-                if brief and self.summary is not None
+                if not full and self.summary is not None
                 else self.summary
             ),
             "encoding": self.encoding,
-            "raw_html": ellipsis(self.raw_html) if brief else self.raw_html,
-            "text": ellipsis(self.text) if brief else self.text,
-            "html": ellipsis(self.html) if brief else self.html,
+            "raw_html": ellipsis(self.raw_html) if not full else self.raw_html,
+            "text": ellipsis(self.text) if not full else self.text,
+            "html": ellipsis(self.html) if not full else self.html,
             "publish_date": (
                 None if self.publish_date is None else date_.encode(self.publish_date)
             ),
@@ -84,7 +84,7 @@ class Article:
         return issues
 
 
-class ArticleIssues(Exception):
+class ArticleIssues(Warning):
     def __init__(self, issues, article):
         self.issues = issues
         self.article = article
@@ -98,12 +98,12 @@ class ArticleIssues(Exception):
             plural="s" if n > 1 else "",
         )
 
-    def to_json(self, brief=False):
+    def to_json(self, full=False):
         return {
             "$type": self.__class__.__name__,
             "message": str(self),
             "issues": [issue.to_json() for issue in self.issues],
-            "article": self.article.to_json(brief=True),
+            "article": self.article.to_json(full=full),
         }
 
 

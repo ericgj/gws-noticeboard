@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 from html2text import HTML2Text
 from markdown2 import markdown
 
+from shared.adapter.logging import RetryException
 from shared.model.article import Article
 from config import Config, Downloader, MetadataParser, BodyParser
 import env
@@ -28,7 +29,7 @@ CONFIG_MAP = {
 }
 
 
-class FetchError(Exception):
+class FetchError(RetryException):
     pass
 
 
@@ -38,14 +39,14 @@ def configs_for_url(url: str) -> Iterator[Config]:
     return CONFIG_MAP.get(key, [Config()])
 
 
-def fetch(url: str, configs: Iterator[Config]) -> Article:
+def fetch(url: str, configs: Iterator[Config], pause=2) -> Article:
     def _fetch():
         tries = 0
         for config in configs:
             tries = tries + 1
             try:
                 if tries > 1:  # pause before trying another download
-                    sleep(2)
+                    sleep(pause)
                 logger.info(
                     "Trying download with %s" % (config.downloader,),
                     env.log_record(downloader=str(config.downloader)),

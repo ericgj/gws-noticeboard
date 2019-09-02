@@ -9,13 +9,26 @@ from warnings import warn
 
 import google.cloud.logging
 
-SCOPES = ["https://www.googleapis.com/auth/logging.write"]
+# import google.cloud.error_reporting
+
+SCOPES = [
+    "https://www.googleapis.com/auth/logging.write",
+    #    "https://www.googleapis.com/auth/cloud-platform",
+]
 
 FORMATTER_ARGS = [None, None, "{"]
 
 
 def client(credentials=None):
     return google.cloud.logging.Client(credentials=credentials)
+
+
+""" Note: not currently used. 
+def error_reporting_client(*, project, service=None, version=None, credentials=None):
+    return google.cloud.error_reporting.Client(
+        project=project, service=service, version=version, credentials=credentials
+    )
+"""
 
 
 def init_logging(client, level=logging.INFO):
@@ -152,15 +165,56 @@ class LogRecord:
         return data
 
 
-def log_errors(logger, log_record, exc_class=Exception):
+# ------------------------------------------------------------------------------
+# Error Reporting
+# ------------------------------------------------------------------------------
+
+
+class RetryException(Exception):
+    """ 
+    Subclass and use this to always throw the error when using the log_errors
+    decorator below. Throwing an error will signal to Cloud Functions to retry,
+    if the function is configured to retry.
+    """
+
+    pass
+
+
+def log_errors(
+    logger,
+    log_record,
+    on_error=None,
+    on_warning=None,
+    warning_class=Warning,
+    error_class=Exception,
+    retry_error_class=RetryException,
+):
     def _log_errors(fn):
         @wraps(fn)
         def __log_errors(*args, **kwargs):
             try:
-                fn(*args, **kwargs)
-            except exc_class as e:
+                return fn(*args, **kwargs)
+
+            except warning_class as w:
+                if hasattr(w, "to_json"):
+                    logger.warning(w, log_record(**w.to_json()))
+                else:
+                    logger.warning(w, log_record(**_json_exc_info()))
+                if on_warning is None:
+                    raise
+                else:
+                    return on_warning(w)
+
+            except retry_error_class as e:
                 logger.error(e, log_record(**_json_exc_info()))
-                raise e from None
+                raise
+
+            except error_class as e:
+                logger.error(e, log_record(**_json_exc_info()))
+                if on_error is None:
+                    raise
+                else:
+                    return on_error(e)
 
         return __log_errors
 

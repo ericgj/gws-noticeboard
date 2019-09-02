@@ -19,7 +19,7 @@ class FetchedArticle:
             "$type": self.__class__.__name__,
             "id": self.id,
             "url": self.url,
-            "article": self.article.to_json(),
+            "article": self.article.to_json(full=True),
         }
 
 
@@ -44,7 +44,7 @@ class FetchedArticleWithIssues:
             "$type": self.__class__.__name__,
             "id": self.id,
             "url": self.url,
-            "article": self.article.to_json(),
+            "article": self.article.to_json(full=True),
             "issues": [issue.to_json() for issue in self.issues],
         }
 
@@ -68,13 +68,15 @@ class FailedFetchingArticle:
         }
 
 
-Command = Union[FetchedArticle, FailedFetchingArticle]
+Command = Union[FetchedArticle, FetchedArticleWithIssues, FailedFetchingArticle]
 
 
 def from_json(d: dict) -> Command:
     t = d.get("$type", None)
     if t == "FetchedArticle":
         return FetchedArticle.from_json(d)
+    if t == "FetchedArticleWithIssues":
+        return FetchedArticleWithIssues.from_json(d)
     if t == "FailedFetchingArticle":
         return FailedFetchingArticle.from_json(d)
     else:

@@ -4,6 +4,7 @@ from shared.event.fetch import (
     FetchedArticleWithIssues,
     FailedFetchingArticle,
 )
+from shared.adapter.logging import RetryException
 import shared.event.core as core_event
 from shared.model.article import Article, ArticleIssues
 
@@ -24,20 +25,22 @@ def _fetch(event: core_event.Event, metadata: dict, ctx) -> str:
             )
 
         except ArticleIssues as w:
-            logger.warning(w, env.log_record(error=w.to_json()))
             env.publish(
                 FetchedArticleWithIssues(
                     id=event.id, url=event.url, issues=w.issues, article=w.article
                 ).to_json()
             )
+            raise
 
-        except Exception as e:
+        except (Exception, RetryException) as e:
             env.publish(
                 FailedFetchingArticle(id=event.id, url=event.url, error=e).to_json()
             )
-            raise e from None
+            raise
 
-    return ""
+        return done()  # Handled without error
+
+    return done()  # Unhandled event
 
 
 def _fetch_article(url: str) -> Article:
@@ -45,8 +48,15 @@ def _fetch_article(url: str) -> Article:
     return browser.fetch(url, configs)
 
 
+def done(x=None, returning=""):
+    return returning
+
+
 # ------------------------------------------------------------------------------
 # CLOUD FUNCTION ENTRY POINTS
 # ------------------------------------------------------------------------------
 
-fetch = env.log_errors(logger)(gcf_adapter(core_event.from_json)(_fetch))
+handle_errors = env.log_errors(logger, on_error=done, on_warning=done)
+message_adapter = gcf_adapter(core_event.from_json)
+
+fetch = handle_errors(message_adapter(_fetch))
