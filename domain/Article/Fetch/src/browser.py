@@ -34,8 +34,7 @@ class FetchError(RetryException):
 
 
 def configs_for_url(url: str) -> Iterator[Config]:
-    _, netloc, _, _, _, _ = urlparse(url)
-    key = ".".join(netloc.lower().split(".")[-2:])
+    _, key = url_site_and_domain(url)
     return CONFIG_MAP.get(key, [Config()])
 
 
@@ -44,47 +43,47 @@ def fetch(url: str, configs: Iterator[Config], pause=2) -> Article:
         tries = 0
         for config in configs:
             tries = tries + 1
+            html = None
+            article = None
+            body = None
+            download_ctx = download_context(url, config.downloader)
+            meta_ctx = metadata_parse_context(url, config.metadata_parser)
+            body_ctx = body_parse_context(url, config.body_parser)
+
+            if tries > 1:  # pause before trying another download
+                sleep(pause)
+
             try:
-                if tries > 1:  # pause before trying another download
-                    sleep(pause)
-                logger.info(
-                    "Trying download with %s" % (config.downloader,),
-                    env.log_record(downloader=str(config.downloader)),
-                )
-                html = get_downloader(config)(url)
-            except Exception as e:
-                logger.warning(
-                    "Download failed for %s: %s" % (config.downloader, e),
-                    env.log_record(downloader=str(config.downloader), error=e),
-                )
+                with env.log_elapsed(
+                    "Downloading from {url_site} with {downloader}",
+                    logger,
+                    context=download_ctx,
+                    raise_error=True,
+                ):
+                    html = get_downloader(config)(url)
+            except Exception:
                 continue
 
             try:
-                logger.info(
-                    "Trying metatdata parse with %s" % (config.metadata_parser,),
-                    env.log_record(metadata_parser=str(config.metadata_parser)),
-                )
-                article = get_metadata_parser(config)(url, html)
-            except Exception as e:
-                logger.warning(
-                    "Metadata parse failed for %s: %s" % (config.metadata_parser, e),
-                    env.log_record(
-                        metadata_parser=str(config.metadata_parser), error=e
-                    ),
-                )
+                with env.log_elapsed(
+                    "Metadata parsing from {url_site} with {metadata_parser}",
+                    logger,
+                    context=meta_ctx,
+                    raise_error=True,
+                ):
+                    article = get_metadata_parser(config)(url, html)
+            except Exception:
                 continue
 
             try:
-                logger.info(
-                    "Trying body parse with %s" % (config.body_parser,),
-                    env.log_record(body_parser=str(config.body_parser)),
-                )
-                body = get_body_parser(config)(url, html, article)
-            except Exception as e:
-                logger.warning(
-                    "Body parse failed for %s: %s" % (config.body_parser, e),
-                    env.log_record(body_parser=str(config.body_parser), error=e),
-                )
+                with env.log_elapsed(
+                    "Article body parsing from {url_site} with {body_parser}",
+                    logger,
+                    context=body_ctx,
+                    raise_error=True,
+                ):
+                    body = get_body_parser(config)(url, html, article)
+            except Exception:
                 continue
 
             article.text = markdown_from_html(body)
@@ -120,6 +119,41 @@ def get_body_parser(config: Config) -> strategy.BodyParser:
         return strategy.lxml.BodyParser(config.body_parser_options)
     else:
         raise ValueError("Unknown body parser: %s" % (config.body_parser,))
+
+
+def download_context(url, downloader):
+    site, domain = url_site_and_domain(url)
+    return {
+        "url": url,
+        "url_site": site,
+        "url_domain": domain,
+        "downloader": str(downloader),
+    }
+
+
+def metadata_parse_context(url, metadata_parser):
+    site, domain = url_site_and_domain(url)
+    return {
+        "url": url,
+        "url_site": site,
+        "url_domain": domain,
+        "metadata_parser": str(metadata_parser),
+    }
+
+
+def body_parse_context(url, body_parser):
+    site, domain = url_site_and_domain(url)
+    return {
+        "url": url,
+        "url_site": site,
+        "url_domain": domain,
+        "body_parser": str(body_parser),
+    }
+
+
+def url_site_and_domain(url):
+    _, site, _, _, _, _ = urlparse(url)
+    return (site, ".".join(site.split(".")[-2:]))
 
 
 def markdown_from_html(html):

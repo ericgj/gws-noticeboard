@@ -139,7 +139,7 @@ def init_logging():
         logger = logging.get_logger(__name__)
         logger.warning(
             "Note: unable to connect to Stackdriver logging, logging locally. "
-            "(Error: %s)" % (e,),
+            "(Error: {error})",
             log_record(error=e),
         )
         return
@@ -149,15 +149,23 @@ def get_logger(name):
     return logging.get_logger(name)
 
 
-def log_record(**context) -> dict:
+def log_record(log_type=None, **context) -> dict:
+    log_type = context.get("$data","LogRecord") if log_type is None else log_type
     return logging.LogRecord(
-        subdomain=subdomain(),
-        service=service(),
-        environment=environment(),
+        app_subdomain=subdomain(),
+        app_service=service(),
+        app_environment=environment(),
         app_state=app_state(),
-        publish_topic=publish_topic(),
-        subscribe_topic=subscribe_topic(),
-    ).with_context(context)
+        app_publish_topic=publish_topic(),
+        app_subscribe_topic=subscribe_topic(),
+    ).with_context(log_type, context)
+
+
+def log_elapsed(msg, logger, context={}, **kwargs):
+    """ 
+    Note: context manager for logging elapsed time
+    """
+    return logging.log_elapsed(msg, logger, log_record, context=context, **kwargs)
 
 
 def log_errors(logger, *args, **kwargs):

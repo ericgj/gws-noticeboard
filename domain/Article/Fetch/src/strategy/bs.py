@@ -7,28 +7,6 @@ import strategy
 logger = env.get_logger(__name__)
 
 
-class ParseError(Exception):
-    def __init__(self, parser, css, error):
-        self.parser = parser
-        self.css = css
-        self.error = error
-
-    def __str__(self):
-        return "BeautifulSoup error using parser %s selecting '%s': %s" % (
-            self.parser,
-            self.css,
-            str(self.error),
-        )
-
-    def to_json(self):
-        return {
-            "$type": self.__class__.__name__,
-            "parser": self.parser.__name__,
-            "css": self.parser.css,
-            "error": str(self.error),
-        }
-
-
 class BodyParser(strategy.BodyParser):
     def __init__(self, options: dict = {}):
         self.html_parsers = options.get("html_parsers", ["lxml"])
@@ -50,10 +28,15 @@ class BodyParser(strategy.BodyParser):
                             continue
                         yield rs[0]
                     except Exception as e:
-                        perr = ParseError(parser=html_parser, css=css, error=e)
                         logger.warning(
-                            "Body parsing failed: %s" % (perr,),
-                            env.log_record(warning=perr.to_json()),
+                            "BeautifulSoup error using parser {html_parser}"
+                            "selecting '{css_selector}': {error}",
+                            env.log_record(
+                                log_type="BeautifulSoupError",
+                                html_parser=html_parser,
+                                css_selector=css,
+                                error=e,
+                            ),
                         )
                         continue
 

@@ -1,8 +1,10 @@
+from contextlib import contextmanager
 from dataclasses import dataclass, asdict
 from functools import wraps
 import json
 import logging
 import sys
+from time import time
 import traceback
 from typing import Optional
 from warnings import warn
@@ -96,6 +98,7 @@ class LogFormatter(logging.Formatter):
         record_data = {
             "log_name": record.name,
             "log_level": record.levelname,
+            "log_levelno": record.levelno,
             "log_asctime": record.asctime,
             "log_created": record.created,
             "log_pathname": record.pathname,
@@ -117,7 +120,7 @@ class LogFormatter(logging.Formatter):
             data = {}
 
         data.update(record_data)
-        data["message"] = record.message.format(**data)
+        data["message"] = record.msg.format(**data)
         return data
 
 
@@ -144,25 +147,61 @@ class LocalLogFormatter(LogFormatter):
 
 @dataclass
 class LogRecord:
-    subdomain: str
-    service: str
-    environment: str
-    publish_topic: str
-    subscribe_topic: Optional[str]
+    app_subdomain: str
+    app_service: str
+    app_environment: str
+    app_publish_topic: str
+    app_subscribe_topic: Optional[str]
     app_state: Optional[str]
 
-    def with_context(self, ctx: dict, key: str = "context") -> dict:
+    def with_context(
+        self, log_type: str, ctx: dict, subkey: Optional[str] = None
+    ) -> dict:
         data = self.to_json()
-        data.update({key: _json_exceptions(ctx)})
+        if subkey is None:
+            data.update(_json_exceptions(ctx))
+        else:
+            data[subkey] = _json_exceptions(ctx)
+        data["log_type"] = log_type
         return data
 
-    def __call__(self, **ctx) -> dict:
-        return self.with_context(ctx)
+    def __call__(self, log_type: str, **ctx) -> dict:
+        return self.with_context(log_type, ctx)
 
     def to_json(self) -> dict:
-        data = asdict(self)
-        data.update({"$type": self.__class__.__name__})
-        return data
+        return asdict(self)
+
+
+@contextmanager
+def log_elapsed(
+    msg, logger, log_record, log_error="error", raise_error=False, context={}
+):
+    def _build_context(secs, err=None):
+        c = context.copy()
+        c["log_type"] = context.get("log_type", "TimeElapsed")
+        c["minutes"] = secs / 60
+        c["seconds"] = secs
+        c["milliseconds"] = secs * 1000
+        if err is not None:
+            c["error"] = err
+        return c
+
+    t0 = time()
+    elapsed = 0
+
+    try:
+        yield
+        elapsed = time() - t0
+    except Exception as e:
+        elapsed = time() - t0
+        new_context = _build_context(elapsed, e)
+        if log_error in ("debug", "info", "warning", "error", "fatal", "critical"):
+            getattr(logger, log_error)(msg, log_record(**new_context))
+        if raise_error:
+            raise
+
+    new_context = _build_context(elapsed)
+    logger.info(msg, log_record(**new_context))
 
 
 # ------------------------------------------------------------------------------
@@ -195,22 +234,28 @@ def log_errors(
             try:
                 return fn(*args, **kwargs)
 
+            except retry_error_class as e:
+                logger.error(
+                    str(e),
+                    log_record(log_type=e.__class__.__name__, **_json_exc_info()),
+                )
+                raise
+
             except warning_class as w:
-                if hasattr(w, "to_json"):
-                    logger.warning(w, log_record(**w.to_json()))
-                else:
-                    logger.warning(w, log_record(**_json_exc_info()))
+                logger.warning(
+                    str(w),
+                    log_record(log_type=w.__class__.__name__, **_json_exc_info()),
+                )
                 if on_warning is None:
                     raise
                 else:
                     return on_warning(w)
 
-            except retry_error_class as e:
-                logger.error(e, log_record(**_json_exc_info()))
-                raise
-
             except error_class as e:
-                logger.error(e, log_record(**_json_exc_info()))
+                logger.error(
+                    str(e),
+                    log_record(log_type=e.__class__.__name__, **_json_exc_info()),
+                )
                 if on_error is None:
                     raise
                 else:
@@ -231,19 +276,21 @@ def _json_exceptions(data, exc_class=Exception):
 
 
 def _json_exception(exc, type_key="$type"):
-    data = exc.__dict__
-    data[type_key] = exc.__class__.__name__
-    return data
+    if hasattr(exc, "to_json"):
+        return exc.to_json()
+    else:
+        data = exc.__dict__
+        data[type_key] = exc.__class__.__name__
+        return data
 
 
-def _json_exc_info(exc_info=None, type_key="$type"):
+def _json_exc_info(exc_info=None):
     if exc_info is None:
         exc_info = sys.exc_info()
     exc_type, exc_value, exc_tb = exc_info
     return {
-        type_key: exc_type.__name__ if hasattr(exc_type, "__name__") else str(exc_type),
-        "value": _json_exception(exc_value),
-        "traceback": _json_traceback(exc_tb),
+        "error": _json_exception(exc_value),
+        "error_traceback": _json_traceback(exc_tb),
     }
 
 
