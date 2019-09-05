@@ -99,8 +99,15 @@ def get_env(args, project):
         app_state=args.app_state,
     )
 
+    subdom_ns = app_subdomain_namespace_name(
+        subdomain=args.subdom,
+        env=args.env,
+        app_state=args.app_state
+    )
+
     return {
         "APP_SUBDOMAIN": args.subdom,
+        "APP_SUBDOMAIN_NAMESPACE": subdom_ns,
         "APP_SERVICE": args.service,
         "APP_ENV": args.env,
         "APP_STATE": "" if args.app_state is None else args.app_state,
@@ -223,6 +230,8 @@ def pubsub_app_topic_name(*, subdomain, service, message_type, env, app_state=No
     mod = "--".join([part.lower() for part in (env, app_state) if part is not None])
     return "--".join([name, mod])
 
+def app_subdomain_namespace_name(*, subdomain, env, app_state=None):
+    return "--".join([part.lower() for part in (subdomain, env, app_state) if part is not None])
 
 def set_env_yaml_env(envyaml, env):
     with open(envyaml, "w") as f:

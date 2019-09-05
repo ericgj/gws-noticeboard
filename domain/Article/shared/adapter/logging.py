@@ -148,6 +148,7 @@ class LocalLogFormatter(LogFormatter):
 @dataclass
 class LogRecord:
     app_subdomain: str
+    app_subdomain_namespace: str
     app_service: str
     app_environment: str
     app_publish_topic: str

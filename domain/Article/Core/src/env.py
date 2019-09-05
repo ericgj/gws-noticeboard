@@ -1,8 +1,11 @@
 import os
-from google.oauth2 import service_account
 
-from shared.util.env import assert_environ, load_json
+import google.cloud.datastore
+
+# Note: eventually put these in librar(ies)
+
 from shared.adapter import pubsub, logging
+from shared.util.env import assert_environ
 
 
 # ------------------------------------------------------------------------------
@@ -78,34 +81,8 @@ def function_target():
     return os.environ["FUNCTION_TARGET"]
 
 
-def service_account_file():
-    """
-    Note: this is not used, set GOOGLE_APPLICATION_CREDENTIALS instead
-    """
-    return os.environ.get("APP_SERVICE_ACCOUNT", None)
-
-
-# ------------------------------------------------------------------------------
-# Service account
-# ------------------------------------------------------------------------------
-
-
-def service_account_info():
-    file = service_account_file()
-    return None if file is None else load_json(file)
-
-
-def service_account_credentials(scopes=None):
-    """
-    Note: If no service account file specified, Google will try to use 
-    GOOGLE_APPLICATION_CREDENTIALS
-    """
-    file = service_account_file()
-    return (
-        None
-        if file is None
-        else service_account.Credentials.from_service_account_file(file, scopes=scopes)
-    )
+def service_account_credentials():
+    return os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", None)
 
 
 # ------------------------------------------------------------------------------
@@ -114,7 +91,7 @@ def service_account_credentials(scopes=None):
 
 
 def pubsub_client():
-    return pubsub.publisher_client(service_account_credentials())
+    return pubsub.publisher_client()
 
 
 def publish(msg):
@@ -127,7 +104,7 @@ def publish(msg):
 
 
 def logging_client():
-    return logging.client(service_account_credentials())
+    return logging.client()
 
 
 def init_logging():
@@ -179,3 +156,12 @@ def log_errors(logger, *args, **kwargs):
     Note: decorator for logging any unhandled errors
     """
     return logging.log_errors(logger, log_record, *args, **kwargs)
+
+
+# ------------------------------------------------------------------------------
+# Datastore
+# ------------------------------------------------------------------------------
+
+
+def storage_client() -> google.cloud.datastore.Client:
+    return google.cloud.datastore.Client(namespace=subdomain_namespace())

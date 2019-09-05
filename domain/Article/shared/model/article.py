@@ -1,15 +1,36 @@
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Iterator, Union
 from dataclasses import dataclass
 
 import shared.util.date_ as date_
 from shared.util.string_ import ellipsis
 
+# ------------------------------------------------------------------------------
+# REQUESTED ARTICLE
+# ------------------------------------------------------------------------------
+
+
+@dataclass
+class RequestedArticle:
+    url: str
+
+    @classmethod
+    def from_json(cls, d: dict) -> "RequestedArticle":
+        return cls(url=d["url"])
+
+    def to_json(self) -> dict:
+        return {"$type": self.__class__.__name__, "url": self.url}
+
+
+# ------------------------------------------------------------------------------
+# FETCHED ARTICLE
+# ------------------------------------------------------------------------------
+
 MIN_EXPECTED_SIZE = 1500
 
 
 @dataclass
-class Article:
+class FetchedArticle:
     title: str
     authors: List[str]
     encoding: str
@@ -21,7 +42,7 @@ class Article:
     site_name: Optional[str] = None
 
     @classmethod
-    def from_json(cls, d: dict) -> "Article":
+    def from_json(cls, d: dict) -> "FetchedArticle":
         return cls(
             site_name=d.get("site_name", None),
             title=d["title"],
@@ -85,11 +106,11 @@ class Article:
 
 
 class ArticleIssues(Warning):
-    def __init__(self, issues, article):
+    def __init__(self, issues: "Iterator[ArticleIssue]", article: "FetchedArticle"):
         self.issues = issues
         self.article = article
 
-    def __str__(self):
+    def __str__(self) -> str:
         n = len(self.issues)
         title = self.article.title
         return "Article '{title}' had {n} potential issue{plural}".format(
@@ -98,7 +119,7 @@ class ArticleIssues(Warning):
             plural="s" if n > 1 else "",
         )
 
-    def to_json(self, full=False):
+    def to_json(self, full: bool = False) -> dict:
         return {
             "$type": self.__class__.__name__,
             "message": str(self),
@@ -109,7 +130,7 @@ class ArticleIssues(Warning):
 
 class ArticleIssue:
     @classmethod
-    def from_json(cls, d):
+    def from_json(cls, d: dict) -> "ArticleIssue":
         typ = d.get("$type", None)
         if typ == "ArticleIssueShort":
             return ArticleIssueShort.from_json(d)
@@ -118,7 +139,7 @@ class ArticleIssue:
         else:
             raise ValueError("Unknown ArticleIssue subclass %s" % (typ,))
 
-    def to_json(self):
+    def to_json(self) -> "ArticleIssue":
         typ = self.__class__.__name__
         msg = str(self)
         data = self.__dict__
@@ -128,13 +149,13 @@ class ArticleIssue:
 
 class ArticleIssueShort(ArticleIssue):
     @classmethod
-    def from_json(cls, d):
+    def from_json(cls, d: dict) -> "ArticleIssueShort":
         return cls(size=d["size"])
 
-    def __init__(self, size):
+    def __init__(self, size: int):
         self.size = size
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (
             "Article seems short ({size} characters). "
             "The parser may have failed to detect the body of the article, "
@@ -144,14 +165,27 @@ class ArticleIssueShort(ArticleIssue):
 
 class ArticleIssueMissing(ArticleIssue):
     @classmethod
-    def from_json(cls, d):
+    def from_json(cls, d: dict) -> "ArticleIssueMissing":
         return cls(field=d["field"])
 
-    def __init__(self, field):
+    def __init__(self, field: str):
         self.field = field
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (
             "Article seems to be missing {field}. "
             "The metadata parser may have failed to extract it from the article. "
         ).format(field=self.field)
+
+
+Article = Union[RequestedArticle, FetchedArticle]
+
+
+def from_json(d: dict) -> Article:
+    t = d.get("$type", None)
+    if t == "RequestedArticle":
+        return RequestedArticle.from_json(d)
+    if t == "FetchedArticle":
+        return FetchedArticle.from_json(d)
+    else:
+        raise ValueError("Unknown type: %s" % (t,))

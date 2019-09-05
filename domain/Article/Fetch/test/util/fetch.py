@@ -42,7 +42,7 @@ def article_data_examples(dates_near=None, dates_range=(7, 7)):
 
     return hyp.fixed_dictionaries(
         {
-            "$type": hyp.just("Article"),
+            "$type": hyp.just("FetchedArticle"),
             "title": hyp.text(),
             "authors": hyp.lists(hyp.text()),
             "encoding": hyp.just("utf8"),

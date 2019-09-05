@@ -1,18 +1,18 @@
 from dataclasses import dataclass
 from typing import Union, Iterator
 
-from shared.model.article import Article, ArticleIssue
+from shared.model import article
 
 
 @dataclass
-class FetchedArticle:
+class SucceededFetchingArticle:
     id: str
     url: str
-    article: Article
+    article: article.Article
 
     @classmethod
-    def from_json(cls, d: dict) -> "FetchedArticle":
-        return cls(id=d["id"], url=d["url"], article=Article.from_json(d["article"]))
+    def from_json(cls, d: dict) -> "SucceededFetchingArticle":
+        return cls(id=d["id"], url=d["url"], article=article.from_json(d["article"]))
 
     def to_json(self) -> dict:
         return {
@@ -24,19 +24,19 @@ class FetchedArticle:
 
 
 @dataclass
-class FetchedArticleWithIssues:
+class SucceededFetchingArticleWithIssues:
     id: str
     url: str
-    article: Article
-    issues: Iterator[ArticleIssue]
+    article: article.Article
+    issues: Iterator[article.ArticleIssue]
 
     @classmethod
-    def from_json(cls, d: dict) -> "FetchedArticleWithIssues":
+    def from_json(cls, d: dict) -> "SucceededFetchingArticleWithIssues":
         return cls(
             id=d["id"],
             url=d["url"],
-            article=Article.from_json(d["article"]),
-            issues=[ArticleIssue.from_json(issue) for issue in d["issues"]],
+            article=article.from_json(d["article"]),
+            issues=[article.ArticleIssue.from_json(issue) for issue in d["issues"]],
         )
 
     def to_json(self) -> dict:
@@ -68,15 +68,17 @@ class FailedFetchingArticle:
         }
 
 
-Command = Union[FetchedArticle, FetchedArticleWithIssues, FailedFetchingArticle]
+Event = Union[
+    SucceededFetchingArticle, SucceededFetchingArticleWithIssues, FailedFetchingArticle
+]
 
 
-def from_json(d: dict) -> Command:
+def from_json(d: dict) -> Event:
     t = d.get("$type", None)
-    if t == "FetchedArticle":
-        return FetchedArticle.from_json(d)
-    if t == "FetchedArticleWithIssues":
-        return FetchedArticleWithIssues.from_json(d)
+    if t == "SucceededFetchingArticle":
+        return SucceededFetchingArticle.from_json(d)
+    if t == "SucceededFetchingArticleWithIssues":
+        return SucceededFetchingArticleWithIssues.from_json(d)
     if t == "FailedFetchingArticle":
         return FailedFetchingArticle.from_json(d)
     else:

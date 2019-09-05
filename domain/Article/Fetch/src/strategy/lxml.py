@@ -1,7 +1,7 @@
 from lxml.cssselect import CSSSelector
 import lxml.etree
 
-from shared.model.article import Article
+from shared.model.article import FetchedArticle
 import strategy
 
 """
@@ -18,7 +18,7 @@ class BodyParser(strategy.BodyParser):
             raise ValueError("Expected either css_selectors or xpath_selectors options")
         super(BodyParser, self).__init__(options)
 
-    def __call__(self, url: str, html: str, article: Article) -> str:
+    def __call__(self, url: str, html: str, article: FetchedArticle) -> str:
         def _select(el):
             for xpath in self.xpath_selectors:
                 rs = el.xpath(xpath)

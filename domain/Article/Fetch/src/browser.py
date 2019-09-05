@@ -6,7 +6,7 @@ from html2text import HTML2Text
 from markdown2 import markdown
 
 from shared.adapter.logging import RetryException
-from shared.model.article import Article
+from shared.model.article import FetchedArticle
 from config import Config, Downloader, MetadataParser, BodyParser
 import env
 import strategy
@@ -38,7 +38,7 @@ def configs_for_url(url: str) -> Iterator[Config]:
     return CONFIG_MAP.get(key, [Config()])
 
 
-def fetch(url: str, configs: Iterator[Config], pause=2) -> Article:
+def fetch(url: str, configs: Iterator[Config], pause=2) -> FetchedArticle:
     def _fetch():
         tries = 0
         for config in configs:

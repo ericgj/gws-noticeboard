@@ -4,7 +4,7 @@ import lxml.etree
 from bs4 import UnicodeDammit
 import newspaper
 
-from shared.model.article import Article
+from shared.model.article import FetchedArticle
 import strategy
 
 GOOGLEBOT_OPTIONS = {
@@ -33,7 +33,7 @@ class Downloader(strategy.Downloader):
 
 
 class MetadataParser(strategy.MetadataParser):
-    def __call__(self, url: str, html: str) -> Article:
+    def __call__(self, url: str, html: str) -> FetchedArticle:
         article = newspaper.Article(url, **self.options)
         article.set_html(html)
         article.parse()
@@ -41,7 +41,7 @@ class MetadataParser(strategy.MetadataParser):
 
 
 class BodyParser(strategy.BodyParser):
-    def __call__(self, url: str, html: str, article: Article) -> str:
+    def __call__(self, url: str, html: str, article: FetchedArticle) -> str:
         if article.html is None:
             article = newspaper.Article(url, **self.options)
             article.download(input_html=html)
@@ -51,10 +51,10 @@ class BodyParser(strategy.BodyParser):
             return article.html
 
 
-def parse_np(np_article: newspaper.Article) -> Article:
+def parse_np(np_article: newspaper.Article) -> FetchedArticle:
     encoding = parse_np_encoding(np_article)
     html = parse_np_html(np_article, encoding)
-    return Article(
+    return FetchedArticle(
         site_name=parse_np_site_name(np_article.meta_data),
         title=np_article.title,
         authors=np_article.authors,

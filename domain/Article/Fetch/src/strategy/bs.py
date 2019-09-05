@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 
-from shared.model.article import Article
+from shared.model.article import FetchedArticle
 import env
 import strategy
 
@@ -17,7 +17,7 @@ class BodyParser(strategy.BodyParser):
             raise ValueError("Expected one or more css_selectors to be specified")
         super(BodyParser, self).__init__(options)
 
-    def __call__(self, url: str, html: str, article: Article) -> str:
+    def __call__(self, url: str, html: str, article: FetchedArticle) -> str:
         def _select():
             for html_parser in self.html_parsers:
                 for css in self.css_selectors:

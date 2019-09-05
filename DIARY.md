@@ -3,6 +3,72 @@
 An automation and news curation tool for busy organizers 
 
 --------------------------------------------------------------------------------
+_2 Sep 2019_
+
+## Some considerations for article fetch before moving on
+
+- Instead of choosing the "first strategy that works", we could run through
+  **all strategies** and choose the best (the one with the least validation
+  errors and largest sized article html, or something);
+
+- We could store "fetch rate per domain" somewhere and slow it down to prevent
+  rate limiting; 
+
+- But more than either of these I think the intractable ones are going to need
+  a real browser and some scripting for login, if that's even feasible. That
+  means standing up a Selenium instance and some kind of steps that can be
+  turned into config, not to mention storage of login secrets.
+
+- Another thing is media downloads, esp photos. I don't want to pass these
+  over the pubsub wires, they should go directly into storage. Perhaps another
+  service to do this that hangs off article.fetch.events ?
+
+## Moving on to article storage (Core)
+
+I think my working storage strategy has been to stick articles into Datastore,
+as (a) they are not that large and (b) you get basic querying and fetching
+without any work at all, and (c) I can't forsee any complex querying. From 
+there if we want full-text search we can kick off a load into BigQuery or 
+whatever.
+
+I don't know if that's the right route, but it seems ok as a first attempt.
+
+The main thing it seems like to work out in Datastore is what are the main
+hierarchical relationships we want to query on and can we fit those into the
+parent-child kind hierarchy, so that ancestor queries can be used effectively.
+
+The rather odd part of how the data flows in in this case, is we have some
+very limited user input at first (a url and a comment), then when the fetch
+returns we have the full article, but without the initial comment, that needs
+to be merged (in some way) with the initial user input; although in another 
+sense it is a new state of the 'article'. 
+
+Further, it's likely we will want to have multiple comments per article. So 
+really that initial data structure should be stored as:
+
+    RequestedArticle > Comment
+
+That then gets transformed into
+
+    FetchedArticle  > Comment
+
+So 'RequestedArticle' and 'FetchedArticle' are states of Article (the datastore
+_kind_).
+
+All this to say, unfortunately yes I think we need some renaming in Fetch.
+
+(Another hierarchy is that between the article and its media (images etc.), 
+assuming we want to cache the media as well as the article markup; and the
+media themselves we'd want to store in GCS.)
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------
 _1 Sep 2019_
 
 ## Python logging, a dumpster fire

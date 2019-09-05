@@ -1,12 +1,12 @@
 from shared.adapter.pubsub import gcf_adapter
 from shared.event.fetch import (
-    FetchedArticle,
-    FetchedArticleWithIssues,
+    SucceededFetchingArticle,
+    SucceededFetchingArticleWithIssues,
     FailedFetchingArticle,
 )
 from shared.adapter.logging import RetryException
 import shared.event.core as core_event
-from shared.model.article import Article, ArticleIssues
+from shared.model.article import FetchedArticle, ArticleIssues
 
 import browser
 import env
@@ -16,17 +16,19 @@ logger = env.get_logger(__name__)
 
 
 def _fetch(event: core_event.Event, metadata: dict, ctx) -> str:
-    if isinstance(event, core_event.SavedNewLink):
+    if isinstance(event, core_event.SavedNewRequestedArticle):
         try:
             article = _fetch_article(event.url)
             article.validate()
             env.publish(
-                FetchedArticle(id=event.id, url=event.url, article=article).to_json()
+                SucceededFetchingArticle(
+                    id=event.id, url=event.url, article=article
+                ).to_json()
             )
 
         except ArticleIssues as w:
             env.publish(
-                FetchedArticleWithIssues(
+                SucceededFetchingArticleWithIssues(
                     id=event.id, url=event.url, issues=w.issues, article=w.article
                 ).to_json()
             )
@@ -43,7 +45,7 @@ def _fetch(event: core_event.Event, metadata: dict, ctx) -> str:
     return done()  # Unhandled event
 
 
-def _fetch_article(url: str) -> Article:
+def _fetch_article(url: str) -> FetchedArticle:
     configs = browser.configs_for_url(url)
     return browser.fetch(url, configs)
 

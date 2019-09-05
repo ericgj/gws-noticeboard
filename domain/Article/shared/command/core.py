@@ -1,16 +1,16 @@
 from dataclasses import dataclass
 from typing import Union, Optional
 
-from shared.model.article import Article
+from shared.model.article import FetchedArticle
 
 
 @dataclass
-class SaveLink:
+class RequestArticle:
     url: str
     note: Optional[str] = None
 
     @classmethod
-    def from_json(cls, d: dict) -> "SaveLink":
+    def from_json(cls, d: dict) -> "RequestArticle":
         return cls(url=d["url"], note=d.get("note", None))
 
     def to_json(self) -> dict:
@@ -18,13 +18,13 @@ class SaveLink:
 
 
 @dataclass
-class SaveArticle:
+class SaveFetchedArticle:
     url: str
-    article: Article
+    article: FetchedArticle
 
     @classmethod
-    def from_json(cls, d: dict) -> "SaveArticle":
-        return cls(url=d["url"], article=Article.from_json(d["article"]))
+    def from_json(cls, d: dict) -> "SaveFetchedArticle":
+        return cls(url=d["url"], article=FetchedArticle.from_json(d["article"]))
 
     def to_json(self) -> dict:
         return {
@@ -51,15 +51,15 @@ class SaveFetchArticleError:
         }
 
 
-Command = Union[SaveLink, SaveArticle, SaveFetchArticleError]
+Command = Union[RequestArticle, SaveFetchedArticle, SaveFetchArticleError]
 
 
 def from_json(d: dict) -> Command:
     t = d.get("$type", None)
-    if t == "SaveLink":
-        return SaveLink.from_json(d)
-    elif t == "SaveArticle":
-        return SaveArticle.from_json(d)
+    if t == "RequestArticle":
+        return RequestArticle.from_json(d)
+    elif t == "SaveFetchedArticle":
+        return SaveFetchedArticle.from_json(d)
     elif t == "SaveFetchArticleError":
         return SaveFetchArticleError.from_json(d)
     else:

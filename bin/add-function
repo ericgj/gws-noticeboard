@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+set -e
+
+SUBDOM=${1}
+if [ -z "${SUBDOM}" ]; then 
+    echo "Usage: ${0} SUBDOM" >&2
+    exit 1
+fi
+
+echo "Creating function as an ${SUBDOM} service..." >&2
+cd "domain/${SUBDOM}" && \
+    cookiecutter git+ssh://git@bitbucket.org/ericgj/ert-gcf-function-cookiecutter.git && \
+    cd ..
+
+
