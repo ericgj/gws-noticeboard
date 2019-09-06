@@ -1,6 +1,12 @@
+import os
 from time import sleep
 from unittest.mock import patch
 from uuid import uuid4
+
+os.environ[
+    "GOOGLE_APPLICATION_CREDENTIALS"
+] = "secrets/test/service-accounts/article.json"
+
 
 from hypothesis import given, settings
 import hypothesis.strategies as hyp
@@ -25,7 +31,7 @@ PAUSE_INTERVAL = 3  # To avoid hypothesis DOS'ing sites... but makes testing slo
 
 
 @given(url=hyp.sampled_from(UNBLOCKED_URLS))
-@settings(deadline=None)
+@settings(deadline=None, max_examples=3)
 # @pytest.mark.skip(reason="temporary")
 @pytest.mark.slow
 def test_fetch_unblocked_urls_publishes_fetched_article(url):
@@ -45,7 +51,7 @@ def test_fetch_unblocked_urls_publishes_fetched_article(url):
 
 
 @given(url=hyp.sampled_from(WARNING_URLS))
-@settings(deadline=None)
+@settings(deadline=None, max_examples=3)
 # @pytest.mark.skip(reason="temporary")
 @pytest.mark.slow
 def test_fetch_warning_urls_publishes_fetched_article_with_issues(url):
@@ -65,7 +71,7 @@ def test_fetch_warning_urls_publishes_fetched_article_with_issues(url):
 
 
 @given(url=hyp.sampled_from(BLOCKED_URLS + UNKNOWN_URLS))
-@settings(deadline=None)
+@settings(deadline=None, max_examples=3)
 # @pytest.mark.skip(reason="temporary")
 @pytest.mark.slow
 def test_fetch_blocked_unknown_urls_publishes_failed_fetching_article_and_throws_error(

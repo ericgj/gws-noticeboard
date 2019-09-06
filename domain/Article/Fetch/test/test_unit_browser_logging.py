@@ -1,9 +1,21 @@
+"""
+Note: currently fails when remote logging is turned on, as there is no stderr
+output in that case.
+TODO: detect remote logging, and load Stackdriver logs and verify them in that case.
+"""
+
 import os
 import random
 from time import sleep
 
+os.environ[
+    "GOOGLE_APPLICATION_CREDENTIALS"
+] = "secrets/test/service-accounts/article.json"
+
+
 # import pytest
 
+from shared.adapter import logging
 from shared.model.article import ArticleIssues
 from main import _fetch_article
 import env
@@ -20,7 +32,7 @@ def fetch_one():
     assert os.environ.get("APP_SUBDOMAIN") is not None
 
     url = random.sample(SAMPLE_URLS, 1)[0]
-    logger.info("Testing url: {url} in service {app_service}", env.log_record(url=url))
+    logger.info("Testing url: {url}", env.log_record(url=url))
     try:
         article = _fetch_article(url)
         article.validate()
@@ -30,12 +42,13 @@ def fetch_one():
 
 
 def logging_elapsed():
-    with env.log_elapsed(
+    with logging.log_elapsed(
         "Testing log_elapsed, expecting 1 sec but was {seconds} sec",
         logger,
-        context={"log_type": "TestingLogElapsed"}
+        context={"log_type": "TestingLogElapsed"},
     ):
         sleep(1)
+
 
 # ------------------------------------------------------------------------------
 # Note: run tests in a subprocess below to avoid pytest eating the logs
@@ -56,12 +69,13 @@ def test_fetch_one():
         # force_fail
     )
 
+
 def test_logging_elapsed():
     _run_in_subprocess(
         "logging_elapsed",
         verify_has_at_least_n_logs(1),
         verify_has_time_elapsed_fields(0),
-        verify_has_log_type(0, "TestingLogElapsed")
+        verify_has_log_type(0, "TestingLogElapsed"),
     )
 
 
@@ -83,7 +97,10 @@ def verify_has_at_least_n_logs(n):
 
 def verify_each_log_has_log_fields(logs, _):
     for log in logs:
-        keys = log.keys()
+        assert "jsonPayload" in log
+        assert "message" in log["jsonPayload"]
+
+        keys = log["jsonPayload"]["message"].keys()
         assert "log_name" in keys, 'Missing "log_name"'
         assert "log_level" in keys, 'Missing "log_level"'
         assert "log_levelno" in keys, 'Missing "log_levelno"'
@@ -98,7 +115,8 @@ def verify_each_log_has_log_fields(logs, _):
 
 def verify_each_log_has_app_fields(logs, _):
     for log in logs:
-        keys = log.keys()
+        assert "labels" in log
+        keys = log["labels"].keys()
         assert "app_subdomain" in keys, 'Missing "app_subdomain"'
         assert "app_service" in keys, 'Missing "app_service"'
         assert "app_environment" in keys, 'Missing "app_environment"'
@@ -109,23 +127,30 @@ def verify_each_log_has_app_fields(logs, _):
 
 def verify_each_log_message_is_resolved(logs, _):
     for log in logs:
-        assert not "{" in log["message"], "Apparenly unresolved message: %s" % (
-            log["message"],
+        data = log["jsonPayload"]["message"]
+        assert not "{" in data["message"], "Apparenly unresolved message: %s" % (
+            data["message"],
         )
+
 
 def verify_has_log_type(i, expected):
     def _verify(logs, _):
         log = logs[i]
-        assert "log_type" in log, 'Missing "log_type"'
-        assert log["log_type"] == expected
+        data = log["jsonPayload"]["message"]
+        assert "log_type" in data, 'Missing "log_type"'
+        assert data["log_type"] == expected
+
     return _verify
+
 
 def verify_has_time_elapsed_fields(i):
     def _verify(logs, _):
         log = logs[i]
-        keys = log.keys()
+        data = log["jsonPayload"]["message"]
+        keys = data.keys()
         assert "seconds" in keys, 'Missing "seconds"'
         assert "milliseconds" in keys, 'Missing "milliseconds"'
+
     return _verify
 
 

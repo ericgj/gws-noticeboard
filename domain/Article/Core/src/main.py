@@ -1,6 +1,7 @@
-from shared.adapter.pubsub import gcf_adapter
-from shared.command import core as core_command
+from shared.adapter import pubsub
+from shared.adapter import logging
 from shared.command import UnknownCommandError
+from shared.command import core as core_command
 from shared.event import core as core_event
 from shared.event import fetch as fetch_event
 from shared.model.article import RequestedArticle
@@ -24,6 +25,7 @@ logger = env.get_logger(__name__)
 
 
 def _core(command: core_command.Command, attributes: dict, ctx) -> str:
+    logger.info("Received command {command}", env.log_record(command=command.to_json()))
     if isinstance(command, core_command.RequestArticle):
         url = standardized_url(command.url)
         request = RequestedArticle(url=url)
@@ -45,9 +47,9 @@ def _from_fetch(event: fetch_event.Event, attributes: dict, ctx) -> str:
 # CLOUD FUNCTION ENTRY POINTS
 # ------------------------------------------------------------------------------
 
-handle_errors = env.log_errors(logger, on_error=done, on_warning=done)
-command_adapter = gcf_adapter(core_command.from_json)
-fetch_event_adapter = gcf_adapter(fetch_event.from_json)
+handle_errors = logging.log_errors(logger, on_error=done, on_warning=done)
+command_adapter = pubsub.gcf_adapter(core_command.from_json)
+fetch_event_adapter = pubsub.gcf_adapter(fetch_event.from_json)
 
 core = handle_errors(command_adapter(_core))
 from_fetch = handle_errors(fetch_event_adapter(_from_fetch))

@@ -1,6 +1,10 @@
 import os
 from unittest.mock import patch
 
+os.environ[
+    "GOOGLE_APPLICATION_CREDENTIALS"
+] = "secrets/test/service-accounts/article.json"
+
 from hypothesis import given, settings
 import pytest
 
@@ -15,10 +19,6 @@ import env
 
 from test.util.examples import requested_article_examples
 from test.util import storage as storage_util
-
-os.environ[
-    "GOOGLE_APPLICATION_CREDENTIALS"
-] = "secrets/test/service-accounts/article.json"
 
 
 @given(requested_article_data=requested_article_examples())

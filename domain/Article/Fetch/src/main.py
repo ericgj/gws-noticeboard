@@ -1,10 +1,10 @@
-from shared.adapter.pubsub import gcf_adapter
+from shared.adapter import logging
+from shared.adapter import pubsub
 from shared.event.fetch import (
     SucceededFetchingArticle,
     SucceededFetchingArticleWithIssues,
     FailedFetchingArticle,
 )
-from shared.adapter.logging import RetryException
 import shared.event.core as core_event
 from shared.model.article import FetchedArticle, ArticleIssues
 
@@ -34,7 +34,7 @@ def _fetch(event: core_event.Event, metadata: dict, ctx) -> str:
             )
             raise
 
-        except (Exception, RetryException) as e:
+        except (Exception, logging.RetryException) as e:
             env.publish(
                 FailedFetchingArticle(id=event.id, url=event.url, error=e).to_json()
             )
@@ -58,7 +58,7 @@ def done(x=None, returning=""):
 # CLOUD FUNCTION ENTRY POINTS
 # ------------------------------------------------------------------------------
 
-handle_errors = env.log_errors(logger, on_error=done, on_warning=done)
-message_adapter = gcf_adapter(core_event.from_json)
+handle_errors = logging.log_errors(logger, on_error=done, on_warning=done)
+message_adapter = pubsub.gcf_adapter(core_event.from_json)
 
 fetch = handle_errors(message_adapter(_fetch))

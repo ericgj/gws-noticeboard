@@ -6,6 +6,7 @@ from html2text import HTML2Text
 from markdown2 import markdown
 
 from shared.adapter.logging import RetryException
+from shared.adapter import logging
 from shared.model.article import FetchedArticle
 from config import Config, Downloader, MetadataParser, BodyParser
 import env
@@ -54,7 +55,7 @@ def fetch(url: str, configs: Iterator[Config], pause=2) -> FetchedArticle:
                 sleep(pause)
 
             try:
-                with env.log_elapsed(
+                with logging.log_elapsed(
                     "Downloading from {url_site} with {downloader}",
                     logger,
                     context=download_ctx,
@@ -65,7 +66,7 @@ def fetch(url: str, configs: Iterator[Config], pause=2) -> FetchedArticle:
                 continue
 
             try:
-                with env.log_elapsed(
+                with logging.log_elapsed(
                     "Metadata parsing from {url_site} with {metadata_parser}",
                     logger,
                     context=meta_ctx,
@@ -76,7 +77,7 @@ def fetch(url: str, configs: Iterator[Config], pause=2) -> FetchedArticle:
                 continue
 
             try:
-                with env.log_elapsed(
+                with logging.log_elapsed(
                     "Article body parsing from {url_site} with {body_parser}",
                     logger,
                     context=body_ctx,

@@ -106,6 +106,7 @@ def get_env(args, project):
     )
 
     return {
+        "APP_PROJECT": project,
         "APP_SUBDOMAIN": args.subdom,
         "APP_SUBDOMAIN_NAMESPACE": subdom_ns,
         "APP_SERVICE": args.service,

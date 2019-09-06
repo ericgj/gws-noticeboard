@@ -13,6 +13,11 @@ from shared.util.env import assert_environ
 # ------------------------------------------------------------------------------
 
 
+@assert_environ(["APP_PROJECT"])
+def project_id():
+    return os.environ["APP_PROJECT"]
+
+
 @assert_environ(["APP_SUBDOMAIN"])
 def subdomain():
     return os.environ["APP_SUBDOMAIN"]
@@ -67,11 +72,6 @@ def local_logging():
 # ------------------------------------------------------------------------------
 
 
-@assert_environ(["GCP_PROJECT"])
-def project_id():
-    return os.environ["GCP_PROJECT"]
-
-
 def function_name():
     return os.environ.get("FUNCTION_NAME", function_target())
 
@@ -79,6 +79,12 @@ def function_name():
 @assert_environ(["FUNCTION_TARGET"])
 def function_target():
     return os.environ["FUNCTION_TARGET"]
+
+
+@assert_environ(["FUNCTION_REGION"])
+def region():
+    """ Note this may be deprecated by Google in the future """
+    return os.environ["FUNCTION_REGION"]
 
 
 def service_account_credentials():
@@ -109,20 +115,26 @@ def logging_client():
 
 def init_logging():
     if local_logging():
-        logging.init_local_logging(logging_level())
+        logging.init_local_logging(level=logging_level(), labels=log_labels())
         return
 
     try:
-        logging.init_logging(logging_client(), logging_level())
+        logging.init_logging(
+            logging_client(),
+            level=logging_level(),
+            labels=log_labels(),
+            resource_type=log_resource_type(),
+            resource_labels=log_resource_labels(),
+        )
         return
 
     except Exception as e:
-        logging.init_local_logging(logging_level())
+        logging.init_local_logging(logging_level(), labels=log_labels())
         logger = logging.get_logger(__name__)
         logger.warning(
             "Note: unable to connect to Stackdriver logging, logging locally. "
             "(Error: {error})",
-            log_record(error=e),
+            log_record(error=str(e)),
         )
         return
 
@@ -131,31 +143,36 @@ def get_logger(name):
     return logging.get_logger(name)
 
 
-def log_record(log_type=None, **context) -> dict:
-    log_type = context.get("$data", "LogRecord") if log_type is None else log_type
-    return logging.LogRecord(
-        app_subdomain=subdomain(),
-        app_subdomain_namespace=subdomain_namespace(),
-        app_service=service(),
-        app_environment=environment(),
-        app_state=app_state(),
-        app_publish_topic=publish_topic(),
-        app_subscribe_topic=subscribe_topic(),
-    ).with_context(log_type, context)
-
-
-def log_elapsed(msg, logger, context={}, **kwargs):
+def log_resource_type():
     """ 
-    Note: context manager for logging elapsed time
+    Note: collect logs under project resource rather than anything fancier
+    (easier to find and collect)
     """
-    return logging.log_elapsed(msg, logger, log_record, context=context, **kwargs)
+    return "project"
 
 
-def log_errors(logger, *args, **kwargs):
+def log_resource_labels() -> dict:
+    return {"project_id": project_id()}
+
+
+def log_labels() -> dict:
+    return {
+        "app_subdomain": subdomain(),
+        "app_subdomain_namespace": subdomain_namespace(),
+        "app_service": service(),
+        "app_environment": environment(),
+        "app_state": app_state(),
+        "app_publish_topic": publish_topic(),
+        "app_subscribe_topic": subscribe_topic(),
+    }
+
+
+def log_record(**kwargs) -> dict:
     """ 
-    Note: decorator for logging any unhandled errors
+    Note all app-specific context is added as log labels at logger init, so
+    this is just a pass-through of local context.
     """
-    return logging.log_errors(logger, log_record, *args, **kwargs)
+    return kwargs
 
 
 # ------------------------------------------------------------------------------

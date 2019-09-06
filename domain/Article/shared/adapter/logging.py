@@ -1,15 +1,16 @@
 from contextlib import contextmanager
-from dataclasses import dataclass, asdict
+from datetime import datetime
 from functools import wraps
 import json
 import logging
 import sys
-from time import time
+from time import time, gmtime
 import traceback
-from typing import Optional
+from uuid import uuid4
 from warnings import warn
 
 import google.cloud.logging
+from google.cloud.logging.resource import Resource
 
 # import google.cloud.error_reporting
 
@@ -33,27 +34,34 @@ def error_reporting_client(*, project, service=None, version=None, credentials=N
 """
 
 
-def init_logging(client, level=logging.INFO):
+def init_logging(
+    client, level=logging.INFO, resource_type=None, resource_labels=None, labels={}
+):
     """
     Call this once at the top of your main program to log via Stackdriver. 
     """
     if isinstance(level, str):
         level = getattr(logging, level)
-    handler = client.get_default_handler()
+    resource = (
+        Resource(type=resource_type, labels=resource_labels)
+        if resource_type is not None
+        else None
+    )
+    handler = client.get_default_handler(resource=resource, labels=labels)
     handler.setFormatter(LogFormatter(*FORMATTER_ARGS))
     root_logger = logging.getLogger()
     root_logger.addHandler(handler)
     root_logger.setLevel(level)
 
 
-def init_local_logging(level=logging.INFO):
+def init_local_logging(level=logging.INFO, labels=None):
     """
     Call this once at the top of your main program to log locally. 
     """
     if isinstance(level, str):
         level = getattr(logging, level)
     handler = logging.StreamHandler()
-    handler.setFormatter(LocalLogFormatter(*FORMATTER_ARGS))
+    handler.setFormatter(LocalLogFormatter(labels, *FORMATTER_ARGS))
     root_logger = logging.getLogger()
     root_logger.addHandler(handler)
     root_logger.setLevel(level)
@@ -127,56 +135,55 @@ class LogFormatter(logging.Formatter):
 class LocalLogFormatter(LogFormatter):
     """
     If logging locally (not connected to Stackdriver), dump the structured record 
-    to a json string if possible, otherwise just the message field and drop
-    a console warning.
+    to a json string in the shape of a Stackdriver log entry record.
+    (If serialization fails, just dump the message field and drop a console warning.)
     """
+
+    def __init__(self, labels=None, *args, **kwargs):
+        super(LocalLogFormatter, self).__init__(*args, **kwargs)
+        self._labels = {} if labels is None else labels
 
     def format(self, record):
         data = super(LocalLogFormatter, self).format(record)
         try:
-            return json.dumps(data)
+            return json.dumps(stackdriver_log_entry(data, labels=self._labels))
         except Exception as e:
             warn("Error serializing log data, only logging message: %s" % (e,))
-            return json.dumps({"message": str(data["message"])})
+            return json.dumps(
+                stackdriver_log_entry(
+                    data, message=str(data.get("message", "")), labels=self._labels
+                )
+            )
+
+
+def stackdriver_log_entry(data, message=None, labels=None, resource=None):
+    rectime = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    logtime = data.get("log_created", None)
+    timestamp = (
+        rectime
+        if logtime is None
+        else datetime(*gmtime(logtime)[:6]).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    )
+    message = data if message is None else message
+    return {
+        "insertId": str(uuid4()),
+        "jsonPayload": {"message": data, "python_logger": data.get("log_name", "")},
+        "logName": "local",
+        "receiveTimestamp": rectime,
+        "resource": {"type": "global", "labels": {}} if resource is None else resource,
+        "labels": {} if labels is None else labels,
+        "severity": data.get("log_level", ""),
+        "timestamp": timestamp,
+    }
 
 
 # ------------------------------------------------------------------------------
-# Log Record
+# Instrumentation
 # ------------------------------------------------------------------------------
-
-
-@dataclass
-class LogRecord:
-    app_subdomain: str
-    app_subdomain_namespace: str
-    app_service: str
-    app_environment: str
-    app_publish_topic: str
-    app_subscribe_topic: Optional[str]
-    app_state: Optional[str]
-
-    def with_context(
-        self, log_type: str, ctx: dict, subkey: Optional[str] = None
-    ) -> dict:
-        data = self.to_json()
-        if subkey is None:
-            data.update(_json_exceptions(ctx))
-        else:
-            data[subkey] = _json_exceptions(ctx)
-        data["log_type"] = log_type
-        return data
-
-    def __call__(self, log_type: str, **ctx) -> dict:
-        return self.with_context(log_type, ctx)
-
-    def to_json(self) -> dict:
-        return asdict(self)
 
 
 @contextmanager
-def log_elapsed(
-    msg, logger, log_record, log_error="error", raise_error=False, context={}
-):
+def log_elapsed(msg, logger, log_error="error", raise_error=False, context={}):
     def _build_context(secs, err=None):
         c = context.copy()
         c["log_type"] = context.get("log_type", "TimeElapsed")
@@ -197,12 +204,12 @@ def log_elapsed(
         elapsed = time() - t0
         new_context = _build_context(elapsed, e)
         if log_error in ("debug", "info", "warning", "error", "fatal", "critical"):
-            getattr(logger, log_error)(msg, log_record(**new_context))
+            getattr(logger, log_error)(msg, new_context)
         if raise_error:
             raise
 
     new_context = _build_context(elapsed)
-    logger.info(msg, log_record(**new_context))
+    logger.info(msg, new_context)
 
 
 # ------------------------------------------------------------------------------
@@ -222,7 +229,6 @@ class RetryException(Exception):
 
 def log_errors(
     logger,
-    log_record,
     on_error=None,
     on_warning=None,
     warning_class=Warning,
@@ -236,27 +242,24 @@ def log_errors(
                 return fn(*args, **kwargs)
 
             except retry_error_class as e:
-                logger.error(
-                    str(e),
-                    log_record(log_type=e.__class__.__name__, **_json_exc_info()),
-                )
+                data = _json_exc_info()
+                data["log_type"] = e.__class__.__name__
+                logger.error(str(e), data)
                 raise
 
             except warning_class as w:
-                logger.warning(
-                    str(w),
-                    log_record(log_type=w.__class__.__name__, **_json_exc_info()),
-                )
+                data = _json_exc_info()
+                data["log_type"] = w.__class__.__name__
+                logger.warning(str(w), data)
                 if on_warning is None:
                     raise
                 else:
                     return on_warning(w)
 
             except error_class as e:
-                logger.error(
-                    str(e),
-                    log_record(log_type=e.__class__.__name__, **_json_exc_info()),
-                )
+                data = _json_exc_info()
+                data["log_type"] = e.__class__.__name__
+                logger.error(str(e), data)
                 if on_error is None:
                     raise
                 else:
