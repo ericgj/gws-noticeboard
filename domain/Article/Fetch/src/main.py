@@ -36,7 +36,9 @@ def _fetch(event: core_event.Event, metadata: dict, ctx) -> str:
 
         except (Exception, logging.RetryException) as e:
             env.publish(
-                FailedFetchingArticle(id=event.id, url=event.url, error=e).to_json()
+                FailedFetchingArticle.from_error(
+                    id=event.id, url=event.url, error=e
+                ).to_json()
             )
             raise
 

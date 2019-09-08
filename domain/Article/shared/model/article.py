@@ -178,14 +178,42 @@ class ArticleIssueMissing(ArticleIssue):
         ).format(field=self.field)
 
 
-Article = Union[RequestedArticle, FetchedArticle]
+# ------------------------------------------------------------------------------
+# FETCH ARTICLE ERROR
+# ------------------------------------------------------------------------------
+
+
+@dataclass
+class FetchArticleError:
+    error_type: str
+    error_message: str
+
+    @classmethod
+    def from_error(cls, error: Exception) -> "FetchArticleError":
+        return cls(error_type=error.__class__.__name__, error_message=str(error))
+
+    @classmethod
+    def from_json(cls, d: dict) -> "FetchArticleError":
+        return cls(error_type=d["error_type"], error_message=d["error_message"])
+
+    def to_json(self) -> dict:
+        return {
+            "$type": self.__class__.__name__,
+            "error_type": self.error_type,
+            "error_message": self.error_message,
+        }
+
+
+Article = Union[RequestedArticle, FetchedArticle, FetchArticleError]
 
 
 def from_json(d: dict) -> Article:
     t = d.get("$type", None)
     if t == "RequestedArticle":
         return RequestedArticle.from_json(d)
-    if t == "FetchedArticle":
+    elif t == "FetchedArticle":
         return FetchedArticle.from_json(d)
+    elif t == "FetchArticleError":
+        return FetchArticleError.from_json(d)
     else:
         raise ValueError("Unknown type: %s" % (t,))

@@ -22,6 +22,9 @@ class SucceededFetchingArticle:
             "article": self.article.to_json(full=True),
         }
 
+    def __str__(self):
+        return '%s(id="%s", url="%s")' % (self.__class__.__name__, self.id, self.url)
+
 
 @dataclass
 class SucceededFetchingArticleWithIssues:
@@ -48,24 +51,38 @@ class SucceededFetchingArticleWithIssues:
             "issues": [issue.to_json() for issue in self.issues],
         }
 
+    def __str__(self):
+        return '%s(id="%s", url="%s")' % (self.__class__.__name__, self.id, self.url)
+
 
 @dataclass
 class FailedFetchingArticle:
     id: str
     url: str
-    error: Union[str, Exception]
+    error: article.FetchArticleError
+
+    @classmethod
+    def from_error(cls, id: str, url: str, error: Exception) -> "FailedFetchingArticle":
+        return cls(id=id, url=url, error=article.FetchArticleError.from_error(error))
 
     @classmethod
     def from_json(cls, d: dict) -> "FailedFetchingArticle":
-        return cls(id=d["id"], url=d["url"], error=d["error"])
+        return cls(
+            id=d["id"],
+            url=d["url"],
+            error=article.FetchArticleError.from_json(d["error"]),
+        )
 
     def to_json(self) -> dict:
         return {
             "$type": self.__class__.__name__,
             "id": self.id,
             "url": self.url,
-            "error": str(self.error),
+            "error": self.error.to_json(),
         }
+
+    def __str__(self):
+        return '%s(id="%s", url="%s")' % (self.__class__.__name__, self.id, self.url)
 
 
 Event = Union[
