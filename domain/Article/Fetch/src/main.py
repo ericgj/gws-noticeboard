@@ -29,7 +29,7 @@ def _fetch(event: core_event.Event, metadata: dict, ctx) -> str:
         except ArticleIssues as w:
             env.publish(
                 SucceededFetchingArticleWithIssues(
-                    id=event.id, url=event.url, issues=w.issues, article=w.article
+                    id=event.id, url=event.url, article=w.article
                 ).to_json()
             )
             raise

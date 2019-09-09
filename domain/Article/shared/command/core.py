@@ -20,7 +20,6 @@ class RequestArticle:
         return '%s(url="%s")' % (self.__class__.__name__, self.url)
 
 
-
 @dataclass
 class SaveFetchedArticle:
     id: str
@@ -38,7 +37,7 @@ class SaveFetchedArticle:
             "$type": self.__class__.__name__,
             "id": self.id,
             "url": self.url,
-            "article": self.article.to_json(),
+            "article": self.article.to_json(full=True),
         }
 
     def __str__(self):

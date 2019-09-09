@@ -52,9 +52,9 @@ def requested_article_examples(urls=None):
     )
 
 
-def fetched_article_examples(dates_near=None, dates_range=(7, 7)):
+def fetched_article_examples(dates_near=None, dates_range=(7, 7), size=1500):
     if dates_near is None:
-        date_gen = hyp.dates().map(lambda d: d.strftime("%Y-%m-%d"))
+        date_gen = hyp.none()
     else:
         min_value = dates_near - timedelta(days=dates_range[0])
         max_value = dates_near + timedelta(days=dates_range[1])
@@ -70,8 +70,8 @@ def fetched_article_examples(dates_near=None, dates_range=(7, 7)):
             "encoding": hyp.just("utf8"),
             "raw_html": hyp.text(),
             "text": hyp.text(),
-            "html": hyp.text(),
-            "publish_date": hyp.none() | date_gen,
+            "html": hyp.text(min_size=size, max_size=size),
+            "publish_date": date_gen,
             "summary": hyp.none() | hyp.text(),
             "site_name": hyp.none() | hyp.text(),
         }

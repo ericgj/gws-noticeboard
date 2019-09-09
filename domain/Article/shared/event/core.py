@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Union
+from typing import Union, Iterator
 
 
 @dataclass
@@ -28,6 +28,26 @@ class SavedFetchedArticle(SavedArticle):
 
 class SavedFetchArticleError(SavedArticle):
     pass
+
+
+@dataclass
+class SavedArticleIssues:
+    article_id: str
+    issue_ids: Iterator[str]
+
+    @classmethod
+    def from_json(cls, d: dict) -> "SavedArticleIssues":
+        return cls(article_id=d["article_id"], issue_ids=d["issue_ids"])
+
+    def to_json(self) -> dict:
+        return {
+            "$type": self.__class__.__name__,
+            "article_id": self.article_id,
+            "issue_ids": self.issue_ids,
+        }
+
+    def __str__(self):
+        return '%s(article_id="%s")' % (self.__class__.__name__, self.article_id)
 
 
 Event = Union[SavedNewRequestedArticle, SavedFetchedArticle, SavedFetchArticleError]

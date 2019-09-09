@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Union, Iterator
+from typing import Union
 
 from shared.model import article
 
@@ -27,32 +27,8 @@ class SucceededFetchingArticle:
 
 
 @dataclass
-class SucceededFetchingArticleWithIssues:
-    id: str
-    url: str
-    article: article.Article
-    issues: Iterator[article.ArticleIssue]
-
-    @classmethod
-    def from_json(cls, d: dict) -> "SucceededFetchingArticleWithIssues":
-        return cls(
-            id=d["id"],
-            url=d["url"],
-            article=article.from_json(d["article"]),
-            issues=[article.ArticleIssue.from_json(issue) for issue in d["issues"]],
-        )
-
-    def to_json(self) -> dict:
-        return {
-            "$type": self.__class__.__name__,
-            "id": self.id,
-            "url": self.url,
-            "article": self.article.to_json(full=True),
-            "issues": [issue.to_json() for issue in self.issues],
-        }
-
-    def __str__(self):
-        return '%s(id="%s", url="%s")' % (self.__class__.__name__, self.id, self.url)
+class SucceededFetchingArticleWithIssues(SucceededFetchingArticle):
+    pass
 
 
 @dataclass

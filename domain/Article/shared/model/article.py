@@ -139,7 +139,7 @@ class ArticleIssue:
         else:
             raise ValueError("Unknown ArticleIssue subclass %s" % (typ,))
 
-    def to_json(self) -> "ArticleIssue":
+    def to_json(self) -> dict:
         typ = self.__class__.__name__
         msg = str(self)
         data = self.__dict__
@@ -152,8 +152,9 @@ class ArticleIssueShort(ArticleIssue):
     def from_json(cls, d: dict) -> "ArticleIssueShort":
         return cls(size=d["size"])
 
-    def __init__(self, size: int):
+    def __init__(self, size: int, ignored: bool = False):
         self.size = size
+        self.ignored = ignored
 
     def __str__(self) -> str:
         return (
@@ -168,8 +169,9 @@ class ArticleIssueMissing(ArticleIssue):
     def from_json(cls, d: dict) -> "ArticleIssueMissing":
         return cls(field=d["field"])
 
-    def __init__(self, field: str):
+    def __init__(self, field: str, ignored: bool = False):
         self.field = field
+        self.ignored = ignored
 
     def __str__(self) -> str:
         return (

@@ -59,7 +59,7 @@ def test_core_success_request_article(requested_article_data):
 )
 @settings(deadline=None, max_examples=3)
 @pytest.mark.unit
-def test_core_success_save_fetched_article(url, fetched_article_data):
+def test_core_success_save_fetched_article_with_no_issues(url, fetched_article_data):
     db = env.storage_client()
     storage_util.zap_articles(db)
 
@@ -77,9 +77,47 @@ def test_core_success_save_fetched_article(url, fetched_article_data):
     with patch("env.publish") as publish:
         ret = core(message, ctx)
 
+    args = publish.call_args_list
+    print(args)
+
     assert ret == ""
     publish.assert_called_once()
-    assert_serialized_event(core_event.SavedFetchedArticle, publish.call_args[0][0])
+    assert_serialized_event(core_event.SavedFetchedArticle, args[0][0][0])
+
+    actual = storage_util.find_article(db, url=standardized_url(url))
+    assert actual.id == id
+    _ = article.FetchedArticle.from_json(actual)
+
+
+@given(url=url_examples(), fetched_article_data=fetched_article_examples())
+@settings(deadline=None, max_examples=3)
+@pytest.mark.unit
+def test_core_success_save_fetched_article_with_issues(url, fetched_article_data):
+    db = env.storage_client()
+    storage_util.zap_articles(db)
+
+    id, _ = storage_util.store_requested_article(
+        db, article.RequestedArticle(url=standardized_url(url))
+    )
+
+    command = core_command.SaveFetchedArticle.from_json(
+        {"id": id, "url": url, "article": fetched_article_data}
+    )
+    attributes = {}
+    message, ctx = gcf_encoding(command.to_json(), attributes)
+
+    ret = None
+    with patch("env.publish") as publish:
+        ret = core(message, ctx)
+
+    args = publish.call_args_list
+    print(args)
+
+    assert ret == ""
+    publish.assert_called()
+    assert len(args) == 2
+    assert_serialized_event(core_event.SavedFetchedArticle, args[0][0][0])
+    assert_serialized_event(core_event.SavedArticleIssues, args[1][0][0])
 
     actual = storage_util.find_article(db, url=standardized_url(url))
     assert actual.id == id

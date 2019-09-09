@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Iterable
+from typing import Optional, Tuple, Iterator
 
 # Note: assumes datastore API
 from google.cloud import datastore
@@ -8,6 +8,7 @@ from shared.model.article import (
     RequestedArticle,
     FetchedArticle,
     FetchArticleError,
+    ArticleIssue,
 )
 
 
@@ -72,23 +73,74 @@ def store_article_note(client: datastore.Client, article_id: str, note: str) -> 
     )
 
 
+def store_article_issues_unless_ignored(
+    client: datastore.Client, article_id: str, issues: Iterator[ArticleIssue]
+) -> Iterator[str]:
+    existing = select(client, "ArticleIssue", parent=["Article", article_id])
+    not_ignored = [issue.key for issue in existing if not issue.get("ignored", False)]
+    ignored = [issue.key for issue in existing if issue.get("ignored", False)]
+
+    if len(not_ignored) > 0:
+        # first, delete all existing non-ignored issues (these will be overwritten)
+        client.delete_multi([key for key in not_ignored])
+
+    pairs = [
+        (
+            client.key("Article", article_id, "ArticleIssue", issue.__class__.__name__),
+            issue,
+        )
+        for issue in issues
+    ]
+
+    updated_ids = []
+    for (key, issue) in pairs:
+        # if issue has already been marked as ignored, don't update
+        if key in ignored:
+            continue
+        else:
+            entity = datastore.Entity(key=key)
+            entity.update(issue.to_json())
+            client.put(entity)
+            updated_ids.append(key.id_or_name)
+
+    return updated_ids
+
+
 # Datastore adapter layer
 
 
 def find_id(client: datastore.Client, kind: str, **params) -> str:
-    return find(client, kind, ["__key__"], **params).id
+    return find_key(client, kind, **params).id
+
+
+def find_key(client: datastore.Client, kind: str, **params) -> datastore.key.Key:
+    return find(client, kind, ["__key__"], **params).key
 
 
 def find(
-    client: datastore.Client, kind: str, _projection: Iterable[str] = (), **params
+    client: datastore.Client,
+    kind: str,
+    projection: Iterator[str] = (),
+    parent: Iterator[str] = [],
+    **params
 ) -> str:
-    query = client.query(kind=kind, projection=_projection)
+    query = client.query(kind=kind, projection=projection)
     for (k, v) in params.items():
         query.add_filter(k, "=", v)
     try:
         return list(query.fetch(limit=1))[0]
     except IndexError:
         raise NotFoundError(kind=kind, params=params)
+
+
+def select(
+    client: datastore.Client,
+    kind: str,
+    projection: Iterator[str] = (),
+    parent: Optional[Iterator[str]] = None,
+) -> Iterator[datastore.key.Key]:
+    query = client.query(kind=kind, projection=projection, ancestor=client.key(*parent))
+    return list(query.fetch())
 
 
 def store(

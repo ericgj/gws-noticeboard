@@ -18,6 +18,7 @@ class NotFoundError(Exception):
 
 def zap_articles(client: datastore.Client):
     zap(client, "Article")
+    zap(client, "ArticleIssue")
 
 
 ##### PLEASE NOTE: these are duplicated from the actual adapter.storage.
@@ -133,9 +134,9 @@ def find_key(client: datastore.Client, kind: str, **params) -> datastore.Key:
 
 
 def find(
-    client: datastore.Client, kind: str, _projection: Iterator[str] = (), **params
+    client: datastore.Client, kind: str, projection: Iterator[str] = (), **params
 ) -> str:
-    query = client.query(kind=kind, projection=_projection)
+    query = client.query(kind=kind, projection=projection)
     for (k, v) in params.items():
         query.add_filter(k, "=", v)
     try:
@@ -149,7 +150,7 @@ def select_keys(client: datastore.Client, kind: str) -> Iterator[datastore.key.K
 
 
 def select(
-    client: datastore.Client, kind: str, _projection: Iterator[str] = ()
+    client: datastore.Client, kind: str, projection: Iterator[str] = ()
 ) -> Iterator[datastore.key.Key]:
-    query = client.query(kind=kind, projection=_projection)
+    query = client.query(kind=kind, projection=projection)
     return list(query.fetch())

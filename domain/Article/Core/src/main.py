@@ -4,7 +4,7 @@ from shared.command import UnknownCommandError
 from shared.command import core as core_command
 from shared.event import core as core_event
 from shared.event import fetch as fetch_event
-from shared.model.article import RequestedArticle
+from shared.model.article import RequestedArticle, ArticleIssues
 from shared.util.url import standardized_url
 
 import adapter.storage as storage
@@ -43,7 +43,22 @@ def _core(command: core_command.Command, attributes: dict, ctx) -> str:
         _ = storage.store_fetched_article(
             env.storage_client(), id, url=url, article=article
         )
+
+        issue_ids = []
+        try:
+            article.validate()
+        except ArticleIssues as w:
+            issue_ids = storage.store_article_issues_unless_ignored(
+                env.storage_client(), article_id=id, issues=w.issues
+            )
+
         env.publish(core_event.SavedFetchedArticle(id=id, url=url).to_json())
+        if len(issue_ids) > 0:
+            env.publish(
+                core_event.SavedArticleIssues(
+                    article_id=id, issue_ids=issue_ids
+                ).to_json()
+            )
         return done()
 
     elif isinstance(command, core_command.SaveFetchArticleError):
@@ -61,7 +76,13 @@ def _core(command: core_command.Command, attributes: dict, ctx) -> str:
 
 def _from_fetch(event: fetch_event.Event, attributes: dict, ctx) -> str:
     logger.info("Received Fetch event {event}", env.log_record(event=str(event)))
-    if isinstance(event, fetch_event.SucceededFetchingArticle):
+    if isinstance(
+        event,
+        (
+            fetch_event.SucceededFetchingArticle,
+            fetch_event.SucceededFetchingArticleWithIssues,
+        ),
+    ):
         id = event.id
         url = event.url
         article = event.article
