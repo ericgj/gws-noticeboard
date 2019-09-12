@@ -2,6 +2,257 @@
 
 An automation and news curation tool for busy organizers 
 
+Also: an overengineered serverless/DDD/microservices test project for one bored
+programmer
+
+
+--------------------------------------------------------------------------------
+_11 Sep 2019_
+
+## Crash and burn
+
+Isolating the domain core as described below ran into some snags. 
+
+The biggest one was that I discovered that _in fact_, when dealing with
+externally persisted state, monoidial updates are not necessarily the
+most efficient or straightforward way to go. You don't necessarily want to
+present the storage layer with the changed state. You want to present it
+with _instructions_ to make the changes; a kind of lower-level list of 
+Commands.
+
+A second problem is that the storage layer should not determine what events
+are published. Events belong in the domain. But (as we identified), you can't
+construct the events until the storage layer has done its thing.
+
+One approach to dealing with both of these is to introduce yet another phase, 
+so
+
+    fetch(command) -> 
+    update(command, aggregate) -> 
+    store(instructions) -> 
+    create_events(command, aggregate) ->
+    publish(events)
+
+
+But... frankly, the process is already very broken up and hard to follow. We
+already have way to much wrapping and unwrapping (commands, aggregates, 
+instructions, events all wrap up bits of state in different ways).
+
+
+### Conflicting concepts
+
+(1) Monoidal, in-memory updates; each new state of the aggregate is synched to 
+storage; which in practice might mean a lot of deletion + adds of sub-entities;
+but the store function can be made generic over the state (aggregate) structure.
+
+(2) Updates are pushed down to the store function; the core function really only
+serves to validate (and perhaps modulate) the requested command. The updates
+can be done as efficiently as possible; but the store function is *not* 
+generic -- it is part of the domain layer. 
+
+(3) Updates are pushed down to the store function, but the core function 
+serves to translate domain commands into storage-layer commands. So the store
+function can be made generic over this storage-layer command type.
+
+I like the sound of (3), but the devil is in the details. It does introduce
+storage-layer structures into the domain, in one way or another.
+
+As for the publishing of domain events. I wonder about revisiting the idea of
+the core function defining a `List (Id -> Event)`. If we make it a rule that
+_domain events do not expose any id's except those of the aggregate root_. And
+that the store function returns this id, which the shell then uses to construct
+and publish the events defined by the core function.
+
+So like this:
+
+    def domain_shell(client, *, fetch, store, publish): 
+        def _domain_shell(fn):
+            @wraps(fn)
+            def __domain_shell(command, user_roles=None):
+                aggregate = fetch(client, command)
+                store_commands, events = fn(command, aggregate, user_roles=user_roles)
+                id = store(client, store_commands)
+                for event in events:
+                    publish( event(id).to_json() )
+
+            return __domain_shell
+        return _domain_shell
+
+
+_10 Sep 2019_
+
+## The core of the domain
+
+So far my conception of the 'core' function has been impure, looking something
+like:
+
+    id = command.thing_id
+    fields_to_update = command.data
+    storage.update_something_in_thing(env.storage_client(), id=id, fields_to_update)
+    env.publish( events.UpdatedSomethingInThing(thing_id=id) )
+
+or perhaps with some dependence on the current state:
+
+    id = command.thing_id
+    fields_to_update = command.data
+    with storage.transaction():
+        thing = storage.get_thing(client, id=id)
+        new_thing = update_something_in_thing(thing, fields_to_update)
+        storage.store_thing(client, id=id, new_thing)
+    env.publish( events.UpdatedSomethingInThing(thing_id=id) )
+    
+
+I think that's fine and all, but we can't claim to have a pure functional
+core. The domain reaches into storage and pubsub. (Hence the need for mocking
+in the tests.) 
+
+The pure functional core starts to appear in the second example in the 
+`update_something_in_thing` function which is a monoidal 
+`model -> data -> model`. Can we extract it so the surrounding mess can be
+a generic decorator around it?  We have been through this exercise before in
+another context.
+
+### Input and output
+
+Not every command (1) concerns an existing entity, or (2) needs an entity's 
+current state to be loaded in order perform the command, or (3) need the same
+type of entity (the root aggregate so to speak; it could be a command modifying
+some sub-entity of the root). 
+
+Given this diversity, I feel we need a custom `fetch` function that fetches the
+current state of the required entities (or fetches nothing), given the command; 
+that will then serve as input to the `core` function. It is not feasible to 
+write this generically without expressing the commands in something other than 
+domain language.
+
+But more than this, given the fact (3) above: the thing that gets fetched must
+be able to be unified under a type. My proposal is to have this be the
+subdomain's Aggregate type, under which all the entities can be composed, 
+together with their id's; e.g. in this case 
+
+    @dataclass
+    class ArticleAggregate:
+        id: Id
+        url: str
+        article: Article
+        issues: Iterator[Tuple[Id,ArticleIssue]]
+        notes: Iterator[str]
+
+This means that a theoretical command like `IgnoreArticleIssue` would need to
+load both `Article` and the underlying `ArticleIssues`. But would a command
+like `CommentOnArticle` which has nothing to do with article issues, need to
+load them? It seems less restrictive (although more verbose) to define a union
+of different aggregate forms needed for the different updates.
+
+    @dataclass
+    class ArticleAgg:           # used for `CommentOnArticle` or `SaveFetchedArticle`
+        id: Id
+        url: str
+        article: Article
+        notes: Iterator[str]
+
+    @dataclass
+    class ArticleIssuesAgg:     # used for `IgnoreArticleIssue`
+        id: Id
+        issues: Iterator[Tuple[Id,ArticleIssue]]
+
+
+    Aggregate = Union[ArticleAgg, ArticleIssuesAgg]
+
+
+I *think* the same Aggregate structure could be used as "instructions" for 
+*writing* to storage. For instance if we added a case for "new article", without
+an `id`, we could model output of "constructor" commands like 
+`SaveRequestedArticle`:
+
+    @dataclass
+    class NewArticleAgg:
+        url: str
+        article: Article
+        notes: Iterator[str]
+
+
+If so, then the core function signature could be
+
+    Command -> Aggregate -> Aggregate
+
+the input Aggregate being the result of the "pre-", `fetch` function:
+    
+    Command -> Aggregate
+
+
+### And then what about events?
+
+I have in mind this:
+
+    Command -> Aggregate -> ( Aggregate, Iterator[Event] )
+
+The thing is, for constructor events you don't have id's yet, so you can't
+actually construct events. And let's say instead you return a 
+`List (Id -> Event)`. it seems like a bit of a hard (verging on impossible) 
+problem to determine generically from an Aggregate which id's are needed to 
+construct which events in the list.
+
+So... I think the post- function, the one that writes to storage,
+also needs to be app-specific. 
+
+    Command -> Aggregate -> Iterator[Event]
+
+The list of events output from this can then generically be published.
+
+
+### And what about user authorization?
+
+I don't know what this will be yet, but let's assume for events where they are
+needed, they get sent (from the UI, for example) in the "attributes" of the
+pubsub message. They get dealt with in Core:
+
+
+Fetch:
+
+    datastore.Client -> Command -> Aggregate
+
+Core:
+
+    Optional[UserRoles] -> Command -> Aggregate -> Aggregate
+
+Store:
+
+    datastore.Client -> Command -> Aggregate -> Iterator[Event]
+
+
+The remaining question is what about domain logic errors (validation, user
+unauthorized, etc.) that happen in the Core function. Should these be
+returned in a Union with the Aggregate (monadic Either style), or raised as
+errors?  Raising them as errors makes the core function impure; but on the
+other hand, it is more pythonic.  I think it is ok to raise them, especially
+if they can derive from a base Exception class and be identified and handled 
+accordingly.
+
+
+### Draft implementation
+
+
+    def domain_shell(client, *, fetch, store, publish): 
+        def _domain_shell(fn):
+            @wraps(fn)
+            def __domain_shell(command, user_roles=None):
+                existing = fetch(client, command)
+                updated = fn(command, existing, user_roles=user_roles)
+                events = store(client, command, updated)
+                for event in events:
+                    publish( event.to_json() )
+
+            return __domain_shell
+        return _domain_shell
+
+### Critique
+
+The main problem as I see it is `fetch`, `core`, and `store`, all have to
+agree on the shape of the aggregate given the command. I wonder if to mitigate
+this we could organize the modules by command instead of fetch/core/store.
+
+
 --------------------------------------------------------------------------------
 _2 Sep 2019_
 
