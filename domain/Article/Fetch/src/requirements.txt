@@ -23,7 +23,7 @@ markdown2==2.3.8
 newspaper3k==0.2.8
 nltk==3.4.5
 Pillow==6.1.0
-protobuf==3.9.1
+protobuf==3.15.0
 pyasn1==0.4.6
 pyasn1-modules==0.2.6
 python-dateutil==2.8.0
